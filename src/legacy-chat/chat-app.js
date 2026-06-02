@@ -2089,7 +2089,7 @@
         const isCCSource = msgSource === 'claude-code';
         const showCodexBadge = isCodexSource && isCodexEnabledForContact(contact);
         const showCCBadge = isCCSource && isCCEnabledForContact(contact);
-        const allowReasoning = !!contact?.settings?.reasoning_visibility;
+        const allowReasoning = !!message.thinking || !!contact?.settings?.reasoning_visibility;
         const avatar = message.role === 'ai'
             ? `<img class="bubble-avatar" src="${contact.avatar}" alt="${escapeHtml(contact.name)}" />`
             : '';
@@ -6393,7 +6393,7 @@
                     const parsed = parseChatSsePayload(payload, currentEventType);
                     let chunk = parsed.text;
                     const normalizedThinkingChunk = normalizeThinkingChunk(parsed.thinking, fullText, fullThinking);
-                    const thinkingChunk = allowReasoning ? normalizedThinkingChunk : '';
+                    const thinkingChunk = normalizedThinkingChunk;
                     if (thinkingChunk && fullThinking.length < THINKING_MAX_ACCUMULATE) {
                         fullThinking = appendThinkingChunk(fullThinking, thinkingChunk);
                     }
@@ -6405,7 +6405,7 @@
                             role: 'ai',
                             text: fullText,
                             content: fullText,
-                            ...(allowReasoning && fullThinking ? { thinking: fullThinking } : {}),
+                            ...(fullThinking ? { thinking: fullThinking } : {}),
                             time: nowTimeStr(),
                             typing: false,
                             streaming: true,
@@ -6422,7 +6422,7 @@
                     ...state.currentRpMessages[idx],
                     text: fullText,
                     content: fullText,
-                    ...(allowReasoning && fullThinking ? { thinking: fullThinking } : {}),
+                    ...(fullThinking ? { thinking: fullThinking } : {}),
                     streaming: false,
                     typing: false,
                     time: nowTimeStr(),
@@ -6903,16 +6903,24 @@
         const c = byId(contactId);
         if (!c) return;
         const allowReasoning = !!c?.settings?.reasoning_visibility;
+        const aiId = buf.aiId || 'ai_' + Date.now();
 
         let sessionId = '';
-        try { sessionId = await ensureContactSession(c); } catch (err) { return; }
+        try {
+            sessionId = await ensureContactSession(c);
+        } catch (err) {
+            const placeholderIdx = c.messages.findIndex((message) => message.id === aiId);
+            if (placeholderIdx !== -1) c.messages.splice(placeholderIdx, 1);
+            render();
+            return;
+        }
 
         const text = texts.join('\n');
         const msgId = `u_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-        // Push AI typing placeholder
-        const aiId = 'ai_' + Date.now();
-        c.messages.push({ id: aiId, role: 'ai', text: '', content: '', time: '', created_at: new Date().toISOString(), typing: true });
+        if (!c.messages.some((message) => message.id === aiId)) {
+            c.messages.push({ id: aiId, role: 'ai', text: '', content: '', time: '', created_at: new Date().toISOString(), typing: true });
+        }
         syncConversationsFromContacts();
         queueLocalSyncIfChanged(120);
         render();
@@ -7013,7 +7021,7 @@
                     const parsed = parseChatSsePayload(payload, _currentEventType);
                     let chunk = parsed.text;
                     const normalizedThinkingChunk = normalizeThinkingChunk(parsed.thinking, fullText, fullThinking);
-                    const thinkingChunk = allowReasoning ? normalizedThinkingChunk : '';
+                    const thinkingChunk = normalizedThinkingChunk;
 
                     if (thinkingChunk) {
                         // Hard cap: stop accumulating beyond limit (discard excess chunks)
@@ -7108,7 +7116,7 @@
                 await wait(180);
                 await playAssistantChunks(c, chunks, { 
                     startIndex: idx,
-                    thinking: allowReasoning ? fullThinking : '',
+                    thinking: fullThinking,
                     toolCalls: fullToolCalls
                 });
             } else {
@@ -7118,7 +7126,7 @@
                         role: 'ai',
                         text: finalText,
                         content: finalText,
-                        ...(allowReasoning && fullThinking ? { thinking: fullThinking } : {}),
+                        ...(fullThinking ? { thinking: fullThinking } : {}),
                         ...(fullToolCalls ? { toolCalls: fullToolCalls } : {}),
                         time: nowTimeStr(),
                         created_at: new Date().toISOString(),
@@ -7152,7 +7160,7 @@
                     id: aiId, role: 'ai',
                     text: textOut,
                     content: textOut,
-                    ...(allowReasoning && fullThinking ? { thinking: fullThinking } : {}),
+                    ...(fullThinking ? { thinking: fullThinking } : {}),
                     time: nowTimeStr(), created_at: new Date().toISOString(), typing: false,
                 };
                 }
@@ -7192,15 +7200,18 @@
         c.lastTime = '\u521a\u521a';
         setChatInputText(input, '');
         state.chatAttachments = [];
-        syncConversationsFromContacts();
-        queueLocalSyncIfChanged(120);
-        render();
-        scrollToBottom();
-
         // Buffer: debounce AI request, extend timer while user is typing
         if (!_chatMsgBuffers[c.id]) _chatMsgBuffers[c.id] = { texts: [], timer: null, listener: null };
         const buf = _chatMsgBuffers[c.id];
         buf.texts.push(requestText);
+        if (!buf.aiId) {
+            buf.aiId = 'ai_' + Date.now();
+            c.messages.push({ id: buf.aiId, role: 'ai', text: '', content: '', time: '', created_at: new Date().toISOString(), typing: true });
+        }
+        syncConversationsFromContacts();
+        queueLocalSyncIfChanged(120);
+        render();
+        scrollToBottom();
         if (buf.timer) clearTimeout(buf.timer);
         if (!buf.listener) {
             buf.listener = () => {
@@ -7324,7 +7335,7 @@
                     const parsed = parseChatSsePayload(payload, _rCurrentEventType);
                     let chunk = parsed.text;
                     const normalizedThinkingChunk = normalizeThinkingChunk(parsed.thinking, fullText, fullThinking);
-                    const thinkingChunk = allowReasoning ? normalizedThinkingChunk : '';
+                    const thinkingChunk = normalizedThinkingChunk;
                     if (thinkingChunk) {
                         if (fullThinking.length < THINKING_MAX_ACCUMULATE) {
                             fullThinking = appendThinkingChunk(fullThinking, thinkingChunk);
@@ -7392,7 +7403,7 @@
                 await wait(180);
                 await playAssistantChunks(c, chunks, {
                     startIndex: curIdx,
-                    thinking: allowReasoning ? fullThinking : '',
+                    thinking: fullThinking,
                     toolCalls: fullToolCalls,
                 });
             } else {
@@ -7400,7 +7411,7 @@
                     c.messages[curIdx] = {
                         ...c.messages[curIdx],
                         text: rerollText,
-                        ...(allowReasoning && fullThinking ? { thinking: fullThinking } : {}),
+                        ...(fullThinking ? { thinking: fullThinking } : {}),
                         ...(fullToolCalls ? { toolCalls: fullToolCalls } : {}),
                         streaming: false,
                     };
