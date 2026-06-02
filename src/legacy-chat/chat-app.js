@@ -6297,37 +6297,84 @@
         render();
 
         try {
-            const resp = await fetch(`${API_BASE}/api/claude-code/chat`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    conversation_key: `yui:${c.id}`,
+            const body = {
+                conversation_key: `yui:${c.id}`,
+                agent_id: c.id,
+                content: text,
+                client_message_id: msgId,
+                reset: false,
+            };
+            const resp = await requestChatStream(c, body, abortCtrl.signal, '/api/claude-code/chat/stream');
+            const aiIdx = () => c.messages.findIndex((m) => m.id === aiId);
+            if (aiIdx() !== -1) {
+                c.messages[aiIdx()] = {
+                    id: aiId,
+                    role: 'ai',
+                    text: '',
+                    content: '',
+                    time: nowTimeStr(),
+                    created_at: new Date().toISOString(),
+                    typing: false,
+                    streaming: true,
                     agent_id: c.id,
-                    content: text,
-                    client_message_id: msgId,
-                    reset: false,
-                }),
-                signal: abortCtrl.signal,
-            });
-            const data = await resp.json().catch(() => ({}));
-            if (!resp.ok) throw new Error(data.detail || `HTTP ${resp.status}`);
-
-            const reply = String(data.reply || '').trim();
-            const persistedUser = data.user_message && typeof data.user_message === 'object'
-                ? murmurHistoryMessageToStored(data.user_message, c.id)
-                : null;
-            const persistedAssistant = data.assistant_message && typeof data.assistant_message === 'object'
-                ? {
-                    ...murmurHistoryMessageToStored(data.assistant_message, c.id),
                     source: 'claude-code',
                     provider: 'claude-code',
-                }
-                : null;
-            const userIdx = c.messages.findIndex((m) => m.id === msgId);
-            if (userIdx !== -1 && persistedUser) {
-                c.messages[userIdx] = contactMessageFromStored({ ...persistedUser, content: rawText, text: rawText, attachments, client_message_id: msgId });
+                };
+                render();
             }
-            const idx = c.messages.findIndex((m) => m.id === aiId);
+
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let currentEventType = '';
+            let fullText = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const parts = buffer.split('\n');
+                buffer = parts.pop() ?? '';
+                for (const line of parts) {
+                    const trimmed = line.trim();
+                    if (!trimmed) {
+                        currentEventType = '';
+                        continue;
+                    }
+                    if (trimmed.startsWith('event:')) {
+                        currentEventType = trimmed.slice(6).trim();
+                        continue;
+                    }
+                    if (!trimmed.startsWith('data:')) continue;
+                    const payload = trimmed.slice(5).trim();
+                    if (payload === '[DONE]') continue;
+                    if (/^error$/i.test(currentEventType)) {
+                        throw new Error(payload || 'Claude Code stream failed');
+                    }
+                    const parsed = parseChatSsePayload(payload, currentEventType);
+                    const chunk = parsed.text;
+                    if (!chunk) continue;
+                    fullText += chunk;
+                    const idx = aiIdx();
+                    if (idx !== -1) {
+                        c.messages[idx] = {
+                            ...c.messages[idx],
+                            text: fullText,
+                            content: fullText,
+                            time: nowTimeStr(),
+                            typing: false,
+                            streaming: true,
+                            agent_id: c.id,
+                            source: 'claude-code',
+                            provider: 'claude-code',
+                        };
+                        patchStreamingMessageDom(aiId, fullText, '');
+                    }
+                }
+            }
+
+            const reply = fullText.trim();
+            const idx = aiIdx();
             if (idx !== -1 && reply) {
                 const chunks = splitAssistantReply(reply);
                 if (chunks.length > 1) {
@@ -6337,23 +6384,22 @@
                     await wait(120);
                     await playAssistantChunks(c, chunks, {
                         startIndex: idx,
-                        baseId: persistedAssistant?.id || aiId,
+                        baseId: aiId,
                         agentId: c.id,
                         source: 'claude-code',
                         provider: 'claude-code',
                     });
                 } else {
                     c.messages[idx] = {
-                        ...(persistedAssistant ? contactMessageFromStored(persistedAssistant) : {}),
-                        id: persistedAssistant?.id || aiId,
+                        id: aiId,
                         role: 'ai',
                         text: normalizeBubbleText(reply),
                         content: normalizeBubbleText(reply),
                         agent_id: c.id,
                         source: 'claude-code',
                         provider: 'claude-code',
-                        time: persistedAssistant?.time || nowTimeStr(),
-                        created_at: persistedAssistant?.created_at || new Date().toISOString(),
+                        time: nowTimeStr(),
+                        created_at: c.messages[idx]?.created_at || new Date().toISOString(),
                         typing: false,
                     };
                 }
@@ -6367,6 +6413,83 @@
             render();
             scrollToBottom();
         } catch (err) {
+            const streamFailedBeforeText = !String(c.messages.find((m) => m.id === aiId)?.text || '').trim();
+            if (!err?.name?.includes('Abort') && streamFailedBeforeText) {
+                try {
+                    const resp = await fetch(`${API_BASE}/api/claude-code/chat`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            conversation_key: `yui:${c.id}`,
+                            agent_id: c.id,
+                            content: text,
+                            client_message_id: msgId,
+                            reset: false,
+                        }),
+                        signal: abortCtrl.signal,
+                    });
+                    const data = await resp.json().catch(() => ({}));
+                    if (!resp.ok) throw new Error(data.detail || `HTTP ${resp.status}`);
+
+                    const reply = String(data.reply || '').trim();
+                    const persistedUser = data.user_message && typeof data.user_message === 'object'
+                        ? murmurHistoryMessageToStored(data.user_message, c.id)
+                        : null;
+                    const persistedAssistant = data.assistant_message && typeof data.assistant_message === 'object'
+                        ? {
+                            ...murmurHistoryMessageToStored(data.assistant_message, c.id),
+                            source: 'claude-code',
+                            provider: 'claude-code',
+                        }
+                        : null;
+                    const userIdx = c.messages.findIndex((m) => m.id === msgId);
+                    if (userIdx !== -1 && persistedUser) {
+                        c.messages[userIdx] = contactMessageFromStored({ ...persistedUser, content: rawText, text: rawText, attachments, client_message_id: msgId });
+                    }
+                    const idx = c.messages.findIndex((m) => m.id === aiId);
+                    if (idx !== -1 && reply) {
+                        const chunks = splitAssistantReply(reply);
+                        if (chunks.length > 1) {
+                            c.messages.splice(idx, 1);
+                            render();
+                            scrollToBottom();
+                            await wait(120);
+                            await playAssistantChunks(c, chunks, {
+                                startIndex: idx,
+                                baseId: persistedAssistant?.id || aiId,
+                                agentId: c.id,
+                                source: 'claude-code',
+                                provider: 'claude-code',
+                            });
+                        } else {
+                            c.messages[idx] = {
+                                ...(persistedAssistant ? contactMessageFromStored(persistedAssistant) : {}),
+                                id: persistedAssistant?.id || aiId,
+                                role: 'ai',
+                                text: normalizeBubbleText(reply),
+                                content: normalizeBubbleText(reply),
+                                agent_id: c.id,
+                                source: 'claude-code',
+                                provider: 'claude-code',
+                                time: persistedAssistant?.time || nowTimeStr(),
+                                created_at: persistedAssistant?.created_at || new Date().toISOString(),
+                                typing: false,
+                            };
+                        }
+                    } else if (idx !== -1) {
+                        c.messages.splice(idx, 1);
+                    }
+                    c.lastMessage = reply || text;
+                    c.lastTime = nowTimeStr();
+                    syncConversationsFromContacts();
+                    queueLocalSyncIfChanged(120);
+                    render();
+                    scrollToBottom();
+                    return;
+                } catch (fallbackErr) {
+                    err = fallbackErr;
+                }
+            }
             const wasAborted = err.name === 'AbortError';
             if (!wasAborted) console.error('[cc chat] error:', err);
             const idx = c.messages.findIndex((m) => m.id === aiId);
