@@ -3,7 +3,16 @@ export const apiBase =
   import.meta.env.VITE_API_BASE ||
   (import.meta.env.PROD ? "https://api.somni-ref.top" : "");
 
-const _gatewaySecret = import.meta.env.VITE_GATEWAY_SECRET || "";
+function readRuntimeGatewaySecret() {
+  if (typeof window === "undefined") return "";
+  return (
+    window.__YUI_GATEWAY_SECRET__ ||
+    window.localStorage?.getItem("yui_gateway_secret") ||
+    ""
+  );
+}
+
+const _gatewaySecret = import.meta.env.VITE_GATEWAY_SECRET || readRuntimeGatewaySecret();
 
 if (typeof window !== "undefined") {
   window.__YUI_API_BASE__ = apiBase;
