@@ -3347,17 +3347,17 @@
         if (!silent) render();
         try {
             const qs = new URLSearchParams({
-                hours: '24',
+                hours: '168',
                 limit: '50',
                 agent_id: c?.id || state.currentContactId || '',
             });
-            if (c?.sessionId) qs.set('session_id', c.sessionId);
             const resp = await fetch(`${API_BASE}/api/activity-log/recent?${qs.toString()}`);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json().catch(() => ({}));
             state.activityLogEntries = Array.isArray(data.items)
                 ? data.items.map(normalizeActivityLogItem)
                 : [];
+            state.activityLogSources = data.sources || {};
             state.activityLogLoadedAt = new Date().toISOString();
         } catch (error) {
             console.warn('[activity log] load failed', error);
@@ -3412,7 +3412,7 @@
         </div>
         <div class="cot-log-stack">
           ${state.activityLogLoading ? '<div class="cot-log-empty glass-frost"><span class="cot-log-empty-icon">' + icon('cot') + '</span><strong>正在加载活动日志</strong><p>等一下，别盯着白板发呆。</p></div>' : ''}
-          ${!state.activityLogLoading && state.activityLogLoadedAt && !logs.length ? `<div class="cot-log-empty glass-frost"><span class="cot-log-empty-icon">${icon('file')}</span><strong>还没有${currentMode.label}记录</strong><p>别急，这种脑内流现在还没掉下来。</p></div>` : ''}
+          ${!state.activityLogLoading && state.activityLogLoadedAt && !logs.length ? `<div class="cot-log-empty glass-frost"><span class="cot-log-empty-icon">${icon('file')}</span><strong>还没有${currentMode.label}记录</strong><p>已接真实后端：activity ${Number(state.activityLogSources?.activity_events || 0)} / proactive ${Number(state.activityLogSources?.proactive_messages || 0)} / cot ${Number(state.activityLogSources?.cot_logs || 0)}</p></div>` : ''}
           ${logs.map((item) => {
             const visibleSteps = item.steps;
             return `
