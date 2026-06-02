@@ -502,6 +502,11 @@
         const normalized = raw
             .replace(/[ \t]+\n/g, '\n')
             .replace(/\n{3,}/g, '\n\n');
+        const lines = normalized.split('\n').map((line) => line.trim()).filter(Boolean);
+        const codeLikeLines = lines.filter((line) => /^`[^`]+`$/u.test(line) || /^[-*]\s+`[^`]+`$/u.test(line));
+        if (lines.length >= 3 && codeLikeLines.length >= 2) {
+            return [normalized];
+        }
         let paragraphs = normalized
             .split(/\n{2,}/)
             .map((part) => String(part || '').trim())
@@ -6612,7 +6617,7 @@
             if (idx !== -1 && reply) {
                 const chunks = splitAssistantReply(reply);
                 if (chunks.length > 1) {
-                    c.messages.splice(idx, 1);
+                    removeMessageFromContact(c, aiId);
                     render();
                     scrollToBottom();
                     await wait(120);
@@ -6638,7 +6643,7 @@
                     };
                 }
             } else if (idx !== -1) {
-                c.messages.splice(idx, 1);
+                removeMessageFromContact(c, aiId);
             }
             c.lastMessage = reply || text;
             c.lastTime = nowTimeStr();
@@ -6684,7 +6689,7 @@
                     if (idx !== -1 && reply) {
                         const chunks = splitAssistantReply(reply);
                         if (chunks.length > 1) {
-                            c.messages.splice(idx, 1);
+                            removeMessageFromContact(c, aiId);
                             render();
                             scrollToBottom();
                             await wait(120);
@@ -6711,7 +6716,7 @@
                             };
                         }
                     } else if (idx !== -1) {
-                        c.messages.splice(idx, 1);
+                        removeMessageFromContact(c, aiId);
                     }
                     c.lastMessage = reply || text;
                     c.lastTime = nowTimeStr();
@@ -6730,7 +6735,7 @@
             if (idx !== -1) {
                 const textOut = wasAborted ? '' : `Claude Code 连接失败：${err.message}`;
                 if (!textOut) {
-                    c.messages.splice(idx, 1);
+                    removeMessageFromContact(c, aiId);
                 } else {
                     c.messages[idx] = {
                     id: aiId,
@@ -6829,7 +6834,7 @@
             if (idx !== -1 && reply) {
                 const chunks = splitAssistantReply(reply);
                 if (chunks.length > 1) {
-                    c.messages.splice(idx, 1);
+                    removeMessageFromContact(c, aiId);
                     render();
                     scrollToBottom();
                     await wait(120);
@@ -6856,7 +6861,7 @@
                     };
                 }
             } else if (idx !== -1) {
-                c.messages.splice(idx, 1);
+                removeMessageFromContact(c, aiId);
             }
             c.lastMessage = reply || text;
             c.lastTime = nowTimeStr();
@@ -6871,7 +6876,7 @@
             if (idx !== -1) {
                 const textOut = wasAborted ? '' : `Codex \u8fde\u63a5\u5931\u8d25\uff1a${err.message}`;
                 if (!textOut) {
-                    c.messages.splice(idx, 1);
+                    removeMessageFromContact(c, aiId);
                 } else {
                     c.messages[idx] = {
                     id: aiId,
@@ -7120,7 +7125,7 @@
             }
             const chunks = splitAssistantReply(finalText);
             if (idx !== -1 && chunks.length > 1) {
-                c.messages.splice(idx, 1);
+                removeMessageFromContact(c, aiId);
                 render();
                 scrollToBottom();
                 await wait(180);
@@ -7143,7 +7148,7 @@
                         typing: false,
                     };
                 } else if (idx !== -1) {
-                    c.messages.splice(idx, 1);
+                    removeMessageFromContact(c, aiId);
                 }
                 syncConversationsFromContacts();
                 queueLocalSyncIfChanged(120);
@@ -7164,7 +7169,7 @@
                     ? fullText.trim()
                     : `\u8fde\u63a5\u5931\u8d25\uff1a${err.message}\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002`;
                 if (!textOut) {
-                    c.messages.splice(idx, 1);
+                    removeMessageFromContact(c, aiId);
                 } else {
                     c.messages[idx] = {
                     id: aiId, role: 'ai',
@@ -7408,7 +7413,7 @@
             }
             const chunks = splitAssistantReply(rerollText);
             if (curIdx !== -1 && chunks.length > 1) {
-                c.messages.splice(curIdx, 1);
+                removeMessageFromContact(c, rerollId);
                 render();
                 await wait(180);
                 await playAssistantChunks(c, chunks, {
@@ -7426,7 +7431,7 @@
                         streaming: false,
                     };
                 } else if (curIdx !== -1) {
-                    c.messages.splice(curIdx, 1);
+                    removeMessageFromContact(c, rerollId);
                 }
                 render();
             }
@@ -7441,7 +7446,7 @@
             if (curIdx !== -1) {
                 const textOut = wasAborted ? fullText.trim() : `\u91cd\u8bd5\u5931\u8d25\uff1a${err.message}`;
                 if (!textOut) {
-                    c.messages.splice(curIdx, 1);
+                    removeMessageFromContact(c, rerollId);
                 } else {
                     c.messages[curIdx] = {
                     ...c.messages[curIdx],
