@@ -3838,7 +3838,22 @@
         mount.addEventListener('pointerup', handleAvatarCropperPointerUp);
         mount.addEventListener('pointercancel', handleAvatarCropperPointerUp);
 
-        // Long-press a bubble to open the floating tools.
+        const setBubbleToolsOpen = (msgId) => {
+            const nextId = String(msgId || '').trim();
+            state.activeBubbleToolsId = nextId || null;
+            const mountEl = root();
+            if (!mountEl) return;
+            mountEl.querySelectorAll('.bubble-bottom-tools.open').forEach((el) => {
+                el.classList.remove('open');
+            });
+            if (nextId) {
+                mountEl
+                    .querySelector(`.message-row[data-msg-id="${CSS.escape(nextId)}"] .bubble-bottom-tools`)
+                    ?.classList.add('open');
+            }
+        };
+
+        // Long-press a bubble to open the floating tools without re-rendering.
         let pressTimer;
         const startPress = (e) => {
             if (isEditableTarget(e.target)) return;
@@ -3846,9 +3861,8 @@
             if (bubble) {
                 pressTimer = window.setTimeout(() => {
                     const msgId = bubble.dataset.msgId;
-                    state.activeBubbleToolsId = msgId;
+                    setBubbleToolsOpen(msgId);
                     state.suppressBubbleToggle = true;
-                    render();
                     if (navigator.vibrate) navigator.vibrate(50);
                 }, 550);
             }
@@ -4180,18 +4194,7 @@
             }
             const msgId = target.dataset.id;
             const nextId = state.activeBubbleToolsId === msgId ? null : msgId;
-            state.activeBubbleToolsId = nextId;
-            const mount = root();
-            if (mount) {
-                mount.querySelectorAll('.bubble-bottom-tools.open').forEach((el) => {
-                    el.classList.remove('open');
-                });
-                if (nextId) {
-                    mount
-                        .querySelector(`.message-row[data-msg-id="${CSS.escape(nextId)}"] .bubble-bottom-tools`)
-                        ?.classList.add('open');
-                }
-            }
+            setBubbleToolsOpen(nextId);
             return;
         }
 
