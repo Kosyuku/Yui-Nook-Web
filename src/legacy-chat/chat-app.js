@@ -496,6 +496,64 @@
     const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
     const wait = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
+    const INLINE_REASONING_MARKERS = [
+        '我需要', '我应该', '我会', '让我', '用户', '上下文', '系统提示', '当前',
+        '小酒说', '她说', '语气里', '回应我之前', '回想一下', '最近的对话历史',
+        '接受了现状', '不需要长篇大论', '我该怎么回应', '我应该怎么回应',
+        '首先', '然后', '可能是', '也就是说', '尾音', '情绪', '撒娇',
+        'the user', 'i need', 'i should', 'let me',
+    ];
+    const INLINE_REPLY_CUES = [
+        '好', '嗯', '行', '来了', '收到', '听你的', '别急', '放心', '可以',
+        '我能', '我会', '现在我', '不过你放心', '你放心',
+    ];
+
+    function inlineReasoningHitCount(text) {
+        const normalized = String(text || '').toLowerCase();
+        return INLINE_REASONING_MARKERS.reduce((count, marker) => (
+            normalized.includes(marker.toLowerCase()) ? count + 1 : count
+        ), 0);
+    }
+
+    function startsLikeVisibleReply(text) {
+        const stripped = String(text || '').trim().replace(/^[（(][^）)]{0,36}[）)]\s*/u, '');
+        return INLINE_REPLY_CUES.some((cue) => stripped.startsWith(cue));
+    }
+
+    function splitInlineReasoningReply(text, { final = false } = {}) {
+        const raw = String(text || '').replace(/\r\n/g, '\n').trim();
+        if (!raw) return { visible: '', thinking: '' };
+        const paragraphs = raw.split(/\n\s*\n+/).map((part) => part.trim()).filter(Boolean);
+        if (paragraphs.length > 1) {
+            const removed = [];
+            let firstVisible = 0;
+            for (let i = 0; i < paragraphs.length; i += 1) {
+                const paragraph = paragraphs[i];
+                const hits = inlineReasoningHitCount(paragraph);
+                const looksMeta = hits >= 2 || (i === 0 && hits >= 1 && paragraph.length >= 48);
+                if (looksMeta && !startsLikeVisibleReply(paragraph)) {
+                    removed.push(paragraph);
+                    firstVisible = i + 1;
+                    continue;
+                }
+                break;
+            }
+            const visible = paragraphs.slice(firstVisible).join('\n\n').trim();
+            if (removed.length && visible) {
+                return { visible, thinking: removed.join('\n\n') };
+            }
+        }
+        const hits = inlineReasoningHitCount(raw);
+        if (hits >= 3 && !startsLikeVisibleReply(raw)) {
+            return { visible: '', thinking: raw };
+        }
+        return { visible: raw, thinking: '' };
+    }
+
+    function joinThinkingParts(...parts) {
+        return parts.map((part) => cleanThinkingText(part)).filter(Boolean).join('\n\n');
+    }
+
     function splitAssistantReply(text) {
         const raw = String(text || '').replace(/\r\n/g, '\n').trim();
         if (!raw) return [];
@@ -6235,19 +6293,64 @@
         let thinking = '';
         try {
             const obj = JSON.parse(payload);
+            const firstChoice = Array.isArray(obj?.choices) ? (obj.choices[0] || {}) : {};
+            const deltaObj = firstChoice.delta && typeof firstChoice.delta === 'object'
+                ? firstChoice.delta
+                : (obj.delta && typeof obj.delta === 'object' ? obj.delta : {});
+            const messageObj = firstChoice.message && typeof firstChoice.message === 'object' ? firstChoice.message : {};
+            const outputObj = obj.output && typeof obj.output === 'object' ? obj.output : {};
+            const pickText = (...sources) => {
+                for (const source of sources) {
+                    if (!source || typeof source !== 'object') continue;
+                    const value = source.content ?? source.text ?? source.delta ?? source.output_text;
+                    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+                    if (Array.isArray(value)) {
+                        const joined = value.map((item) => {
+                            if (typeof item === 'string') return item;
+                            if (item && typeof item === 'object') return item.text ?? item.content ?? '';
+                            return '';
+                        }).join('');
+                        if (joined) return joined;
+                    }
+                }
+                return '';
+            };
+            const pickThinking = (...sources) => {
+                for (const source of sources) {
+                    if (!source || typeof source !== 'object') continue;
+                    const value = source.thinking
+                        ?? source.reasoning
+                        ?? source.reasoning_content
+                        ?? source.reasoningContent
+                        ?? source.reasoning_delta
+                        ?? source.reasoningDelta
+                        ?? source.thought
+                        ?? source.cot;
+                    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+                    if (Array.isArray(value)) {
+                        const joined = value.map((item) => {
+                            if (typeof item === 'string') return item;
+                            if (item && typeof item === 'object') return item.text ?? item.content ?? item.summary ?? '';
+                            return '';
+                        }).join('');
+                        if (joined) return joined;
+                    }
+                }
+                return '';
+            };
             const isThinkingEvent = /^(thinking|reasoning|reason|thought|cot|inner_thought)$/i.test(eventType);
             const isChatEvent    = /^(chat|message|content|text|assistant|reply|response|output)$/i.test(eventType);
             if (isThinkingEvent) {
-                thinking = obj.thinking ?? obj.reasoning ?? obj.reasoning_content ?? obj.reasoningContent ?? obj.content ?? obj.text ?? obj.delta ?? '';
+                thinking = pickThinking(obj, deltaObj, messageObj, outputObj) || pickText(obj, deltaObj, messageObj, outputObj);
             } else if (isChatEvent) {
                 // event type says this is regular reply 鈥?only take content/delta/text
-                text    = obj.content ?? obj.text ?? obj.delta ?? '';
+                text    = pickText(obj, deltaObj, messageObj, outputObj);
                 // still allow explicit thinking fields inside a chat event
-                thinking = obj.thinking ?? obj.reasoning ?? obj.reasoning_content ?? obj.reasoningContent ?? '';
+                thinking = pickThinking(obj, deltaObj, messageObj, outputObj);
             } else {
                 // no event type: fall back to field-name heuristic
-                text    = obj.content ?? obj.text ?? obj.delta ?? '';
-                thinking = obj.thinking ?? obj.reasoning ?? obj.reasoning_content ?? obj.reasoningContent ?? '';
+                text    = pickText(obj, deltaObj, messageObj, outputObj);
+                thinking = pickThinking(obj, deltaObj, messageObj, outputObj);
             }
         } catch {
             if (/^(thinking|reasoning|reason|thought|cot|inner_thought)$/i.test(eventType)) {
@@ -6924,8 +7027,7 @@
         try {
             sessionId = await ensureContactSession(c);
         } catch (err) {
-            const placeholderIdx = c.messages.findIndex((message) => message.id === aiId);
-            if (placeholderIdx !== -1) c.messages.splice(placeholderIdx, 1);
+            removeMessageFromContact(c, aiId);
             render();
             return;
         }
@@ -7080,22 +7182,33 @@
 
                     if (chunk) {
                         fullText += chunk;
+                        const inlineSplit = splitInlineReasoningReply(fullText);
+                        const visibleText = inlineSplit.visible;
+                        const visibleThinking = joinThinkingParts(fullThinking, inlineSplit.thinking);
                         const idx3 = aiIdx();
                         if (idx3 !== -1) {
                             c.messages[idx3] = {
                                 ...c.messages[idx3],
-                                text: fullText,
-                                content: fullText,
+                                text: visibleText,
+                                content: visibleText,
+                                ...(visibleThinking ? { thinking: visibleThinking } : {}),
                                 time: nowTimeStr(),
                                 typing: false,
                                 streaming: true,
                             };
-                            if (!_textFirstRendered) {
+                            if (!visibleText) {
+                                if (visibleThinking) {
+                                    _thinkingFirstRendered = true;
+                                    state.openThinkingIds[aiId] = true;
+                                    render();
+                                    scrollToBottom();
+                                }
+                            } else if (!_textFirstRendered) {
                                 _textFirstRendered = true;
                                 render();
                                 scrollToBottom();
                             } else {
-                                patchStreamingMessageDom(aiId, fullText, fullThinking);
+                                patchStreamingMessageDom(aiId, visibleText, visibleThinking);
                             }
                         }
                     }
@@ -7113,14 +7226,16 @@
             _cancelThinkingFlush();
             state.streamingAbortController = null;
             const idx = aiIdx();
-            const finalText = fullText.trim();
+            const finalSplit = splitInlineReasoningReply(fullText, { final: true });
+            const finalText = (finalSplit.visible || fullText).trim();
+            const finalThinking = joinThinkingParts(fullThinking, finalSplit.thinking);
             c.lastMessage = finalText || '\u5df2\u5904\u7406';
             c.lastTime = nowTimeStr();
             const thinkEl = root()?.querySelector(`#thinking-${aiId}`);
             if (thinkEl) thinkEl.classList.remove('thinking-active');
             const wrapperEl = root()?.querySelector(`#cot-wrapper-${aiId}`);
             if (wrapperEl) wrapperEl.removeAttribute('data-slow');
-            if (allowReasoning && fullThinking) {
+            if (finalThinking) {
                 delete state.openThinkingIds[aiId];
             }
             const chunks = splitAssistantReply(finalText);
@@ -7131,7 +7246,7 @@
                 await wait(180);
                 await playAssistantChunks(c, chunks, { 
                     startIndex: idx,
-                    thinking: fullThinking,
+                    thinking: finalThinking,
                     toolCalls: fullToolCalls
                 });
             } else {
@@ -7141,12 +7256,27 @@
                         role: 'ai',
                         text: finalText,
                         content: finalText,
-                        ...(fullThinking ? { thinking: fullThinking } : {}),
+                        ...(finalThinking ? { thinking: finalThinking } : {}),
                         ...(fullToolCalls ? { toolCalls: fullToolCalls } : {}),
                         time: nowTimeStr(),
                         created_at: new Date().toISOString(),
                         typing: false,
                     };
+                } else if (idx !== -1 && finalThinking) {
+                    c.messages[idx] = {
+                        id: aiId,
+                        role: 'ai',
+                        text: '',
+                        content: '',
+                        thinking: finalThinking,
+                        time: nowTimeStr(),
+                        created_at: new Date().toISOString(),
+                        typing: false,
+                    };
+                    syncConversationsFromContacts();
+                    queueLocalSyncIfChanged(120);
+                    render();
+                    scrollToBottom();
                 } else if (idx !== -1) {
                     removeMessageFromContact(c, aiId);
                 }
