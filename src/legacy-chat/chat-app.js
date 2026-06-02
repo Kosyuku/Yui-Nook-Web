@@ -5475,6 +5475,7 @@
     }
 
     async function pollProactiveMessages({ silent = true } = {}) {
+        if (state.streamingAbortController) return;
         if (proactivePollInFlight) return;
         proactivePollInFlight = true;
         try {
@@ -5540,7 +5541,7 @@
         if (proactivePollTimer) return;
         proactivePollTimer = window.setInterval(() => {
             pollProactiveMessages({ silent: true });
-        }, 15000);
+        }, 60000);
     }
 
     function mergeMoments(localMoments = [], remoteMoments = []) {

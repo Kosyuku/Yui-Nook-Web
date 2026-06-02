@@ -5927,6 +5927,23 @@ button.model-choice-item {
   color: var(--chat-ui-text);
 }
 
+#chat-app-root[data-theme] .send-round.send-stop-active,
+#chat-app-root .send-round.send-stop-active {
+  background: rgba(44, 38, 48, 0.92) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.16) !important;
+}
+
+#chat-app-root[data-theme] .send-round.send-stop-active svg,
+#chat-app-root .send-round.send-stop-active svg {
+  width: 14px !important;
+  height: 14px !important;
+  display: block;
+  color: #fff !important;
+  filter: none !important;
+}
+
 /* Keep the add-contact form compact on narrow screens. */
 .new-contact-card .ai-input {
   min-height: 42px !important;
