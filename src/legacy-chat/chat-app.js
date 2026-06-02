@@ -246,6 +246,7 @@
         contactModelAdvancedOpen: false,
         chatAttachments: [],
         chatPasteError: '',
+        contactSyncAuthoritative: false,
         companionState: {
             recent_topics: [],
             current_mood: '',
@@ -5044,7 +5045,7 @@
         const role = String(message.role || message.from || '').toLowerCase();
         const model = String(message.model || '').toLowerCase();
         const source = String(message.source || message.provider || '').toLowerCase();
-        return role === 'event' || (role === 'system' && (model === 'event' || source === 'activity_event'));
+        return role === 'event' || model === 'event' || source === 'activity_event';
     }
 
     function compactMessageMinute(message = {}) {
@@ -5348,7 +5349,8 @@
     }
 
     function murmurHistoryMessageToStored(message = {}, contactId = '') {
-        const role = String(message.role || '').toLowerCase() === 'user' ? 'user' : 'ai';
+        const rawRole = String(message.role || '').toLowerCase();
+        const role = rawRole === 'user' ? 'user' : (rawRole === 'system' || rawRole === 'event' ? rawRole : 'ai');
         const createdAt = String(message.created_at || '');
         const content = messageTextValue(message);
         const model = String(message.model || '');
@@ -5701,6 +5703,9 @@
 
     function applyLocalPayload(payload, { source = 'local' } = {}) {
         if (!payload || typeof payload !== 'object') return;
+        if (source === 'remote' && Array.isArray(payload.contacts)) {
+            state.contactSyncAuthoritative = true;
+        }
         if (Array.isArray(payload.contacts)) {
             const rawContacts = payload.contacts.map((contact) => contactDefaults(contact));
             const nextContacts = filterDefaultMockContacts(rawContacts).map((contact) => contactDefaults(contact));
@@ -5836,16 +5841,15 @@
             if (readSyncMeta().pending) return;
         }
         const params = new URLSearchParams({ device_id: getDeviceId() });
-        if (meta.last_server_updated_at) params.set('since', meta.last_server_updated_at);
+        if (meta.last_server_updated_at && state.contactSyncAuthoritative) {
+            params.set('since', meta.last_server_updated_at);
+        }
 
         try {
             const resp = await fetch(`${API_BASE}/api/sync/pull?${params.toString()}`);
             if (!resp.ok) return;
             const data = await resp.json().catch(() => ({}));
-            // Skip if no update, OR if this device pushed the data AND we already have real local contacts
-            // (if local contacts are gone, apply even for is_self so data is recovered)
-            const hasLocalContacts = contactsHaveRealData(state.contacts);
-            if (!data?.has_update || !data?.payload || (data?.is_self && hasLocalContacts)) {
+            if (!data?.has_update || !data?.payload) {
                 if (data?.server_updated_at) {
                     writeSyncMeta({ ...meta, last_server_updated_at: data.server_updated_at, pending: meta.pending });
                 }
@@ -5935,6 +5939,10 @@
                 source: contact.roleTag || '',
             })));
             if (!contacts.length) return;
+            if (state.contactSyncAuthoritative && contactsHaveRealData(state.contacts)) {
+                void hydrateVisibleContactHistories(state.contacts);
+                return;
+            }
             const beforeHash = snapshotHash({ contacts: state.contacts });
             state.contacts = mergeContacts(state.contacts, contacts);
             hydrateContactsFromConversations();
@@ -5970,6 +5978,10 @@
                 count: contact.messageCount || 0,
             })));
             if (!contacts.length) return;
+            if (state.contactSyncAuthoritative && contactsHaveRealData(state.contacts)) {
+                void hydrateVisibleContactHistories(state.contacts);
+                return;
+            }
             const beforeHash = snapshotHash({ contacts: state.contacts });
             state.contacts = mergeContacts(state.contacts, contacts);
             hydrateContactsFromConversations();
