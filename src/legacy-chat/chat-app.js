@@ -492,10 +492,16 @@
         const normalized = raw
             .replace(/[ \t]+\n/g, '\n')
             .replace(/\n{3,}/g, '\n\n');
-        const paragraphs = normalized
+        let paragraphs = normalized
             .split(/\n{2,}/)
             .map((part) => String(part || '').trim())
             .filter(Boolean);
+        if (paragraphs.length <= 1 && /\n/.test(normalized)) {
+            paragraphs = normalized
+                .split(/\n+/)
+                .map((part) => String(part || '').trim())
+                .filter(Boolean);
+        }
         const chunks = [];
         const pushChunk = (part) => {
             const cleaned = String(part || '').trim();
@@ -518,7 +524,7 @@
             let bucket = '';
             sentences.forEach((sentence) => {
                 const next = bucket ? `${bucket}${sentence}` : sentence;
-                if (bucket && next.length > 90) {
+                if (bucket && next.length > 72) {
                     pushChunk(bucket);
                     bucket = sentence;
                 } else {
@@ -529,7 +535,7 @@
         };
         paragraphs.forEach((part) => {
             const canSplit = /[。！？!?…]\s*/u.test(part);
-            if (part.length <= 64 || !canSplit) {
+            if (part.length <= 48 || !canSplit) {
                 pushChunk(part);
             } else {
                 splitLongParagraph(part);
