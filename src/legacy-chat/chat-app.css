@@ -763,6 +763,10 @@
   background: rgba(255, 255, 255, 0.96);
   min-width: 92px;
   padding-top: 12px;
+  padding-right: 12px;
+}
+
+.message-bubble.from-ai.has-cot {
   padding-right: 34px;
 }
 
