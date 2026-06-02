@@ -382,8 +382,16 @@
     function patchStreamingMessageDom(msgId, fullText, fullThinking) {
         const row = root()?.querySelector(`.message-row[data-msg-id="${msgId}"]`);
         if (!row) return;
-        const msgEl = row.querySelector('.message-text');
-        if (msgEl) msgEl.textContent = fullText;
+        const bubble = row.querySelector('.message-bubble');
+        let msgEl = row.querySelector('.message-text');
+        if (!msgEl && bubble && fullText) {
+            bubble.querySelector('.typing-dots')?.remove();
+            bubble.classList.remove('message-awaiting-text');
+            msgEl = document.createElement('div');
+            msgEl.className = 'message-text';
+            bubble.appendChild(msgEl);
+        }
+        if (msgEl) msgEl.textContent = normalizeBubbleText(fullText);
         if (fullThinking) {
             // New v2 thinking-line DOM
             patchThinkingLineDom(msgId, fullThinking, false);
@@ -5147,6 +5155,8 @@
             ...(message.attachments ? { attachments: message.attachments } : {}),
             ...(message.thinking ? { thinking: message.thinking } : {}),
             ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
+            ...(message.typing ? { typing: true } : {}),
+            ...(message.streaming ? { streaming: true } : {}),
         };
     }
 
