@@ -5249,6 +5249,7 @@
             ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
             ...(message.typing ? { typing: true } : {}),
             ...(message.streaming ? { streaming: true } : {}),
+            ...(message.transient ? { transient: true } : {}),
         };
     }
 
@@ -5311,8 +5312,11 @@
             if (!contact?.id) return;
             const contactMessages = Array.isArray(contact.messages) ? contact.messages : [];
             if (contactMessages.length || next[contact.id]?.length) {
-                next[contact.id] = mergeMessageLists(next[contact.id] || [], contactMessages);
-                contact.messages = next[contact.id].map(contactMessageFromStored);
+                const persistentMessages = contactMessages.filter((message) => !message?.transient);
+                const transientMessages = contactMessages.filter((message) => message?.transient).map(contactMessageFromStored);
+                next[contact.id] = mergeMessageLists(next[contact.id] || [], persistentMessages);
+                contact.messages = [...next[contact.id].map(contactMessageFromStored), ...transientMessages]
+                    .sort((a, b) => comparableTime(a.created_at) - comparableTime(b.created_at));
             }
         });
         state.conversations = next;
@@ -7068,7 +7072,7 @@
         const msgId = `u_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
         if (!c.messages.some((message) => message.id === aiId)) {
-            c.messages.push({ id: aiId, role: 'ai', text: '', content: '', time: '', created_at: new Date().toISOString(), typing: true });
+            c.messages.push({ id: aiId, role: 'ai', text: '', content: '', time: '', created_at: new Date().toISOString(), typing: true, transient: true });
         }
         syncConversationsFromContacts();
         queueLocalSyncIfChanged(120);
@@ -7137,7 +7141,7 @@
 
             // Switch placeholder to streaming mode (no longer shows dots)
             const aiIdx = () => c.messages.findIndex(m => m.id === aiId);
-            c.messages[aiIdx()] = { id: aiId, role: 'ai', text: '', content: '', time: nowTimeStr(), created_at: new Date().toISOString(), typing: false, streaming: true };
+            c.messages[aiIdx()] = { id: aiId, role: 'ai', text: '', content: '', time: nowTimeStr(), created_at: new Date().toISOString(), typing: false, streaming: true, transient: true };
             render();
 
             const reader = resp.body.getReader();
@@ -7183,7 +7187,7 @@
                             c.messages[idx] = {
                                 id: aiId, role: 'ai', text: fullText,
                                 thinking: fullThinking, time: nowTimeStr(),
-                                typing: false, streaming: true,
+                                typing: false, streaming: true, transient: true,
                             };
                             if (!_thinkingFirstRendered) {
                                 _thinkingFirstRendered = true;
@@ -7227,6 +7231,7 @@
                                 time: nowTimeStr(),
                                 typing: false,
                                 streaming: true,
+                                transient: true,
                             };
                             if (!visibleText) {
                                 if (visibleThinking) {
