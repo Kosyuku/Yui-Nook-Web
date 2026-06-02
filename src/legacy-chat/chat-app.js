@@ -921,10 +921,10 @@
             heartFilled: `<svg viewBox="0 0 24 24" fill="#B595C9" stroke="none" stroke-width="0"><path d="M12 20.5s-7-4.4-7-10a4 4 0 017-2.5A4 4 0 0119 10.5c0 5.6-7 10-7 10z"/></svg>`,
             comment: `<svg ${common}><path d="M7 18l-3 2 1-3.8A7.8 7.8 0 014.2 13 7.8 7.8 0 1112 20a8 8 0 01-5-2z"/><path d="M8.5 10.5h7M8.5 13.5h4.5"/></svg>`,
             chatArrow: `<svg ${common}><path d="M4.8 18.2l.9-3.3A7.5 7.5 0 014.5 11 7.5 7.5 0 1112 18.5a7.4 7.4 0 01-3.6-.9z"/><path d="M10 9l4 3-4 3"/><path d="M14 12H8"/></svg>`,
-            send: `<svg ${common}><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg>`,
+            send: `<svg ${common}><path d="M12 19V5"/><path d="M5.5 11.5L12 5l6.5 6.5"/></svg>`,
             close: `<svg ${common}><path d="M18 6L6 18M6 6l12 12"/></svg>`,
             camera: `<svg ${common}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>`,
-            attach: `<svg ${common}><path d="M21 11.5l-8.7 8.7a5 5 0 01-7.1-7.1l9.2-9.2a3.5 3.5 0 015 5L9 19.3a2 2 0 01-2.8-2.8l8.5-8.5"/></svg>`,
+            attach: `<svg ${common}><path d="M12 5v14M5 12h14"/></svg>`,
             quote: `<svg ${common}><path d="M9 7H5v5h4v5H4v-5c0-2.8 1.8-5 5-5zM20 7h-4v5h4v5h-5v-5c0-2.8 1.8-5 5-5z"/></svg>`,
             reroll: `<svg ${common}><path d="M20 11a8 8 0 10-2.3 5.7"/><path d="M20 4v7h-7"/></svg>`,
             cot: `<svg ${common}><path d="M12 4v16M4 12h16"/><path d="M7.5 7.5l9 9M16.5 7.5l-9 9" opacity="0.18"/></svg>`,
@@ -5614,12 +5614,17 @@
             const nextContacts = filterDefaultMockContacts(rawContacts).map((contact) => contactDefaults(contact));
             const currentHasRealContacts = contactsHaveRealData(state.contacts);
             if (nextContacts.length) {
-                state.contacts = mergeContacts(state.contacts, nextContacts);
+                state.contacts = source === 'remote'
+                    ? mergeContacts([], nextContacts)
+                    : mergeContacts(state.contacts, nextContacts);
                 if (!byId(state.currentContactId)) state.currentContactId = state.contacts[0]?.id || '';
             } else if (isDefaultMockContacts(rawContacts)) {
                 if (!currentHasRealContacts) state.contacts = [];
                 if (!byId(state.currentContactId)) state.currentContactId = state.contacts[0]?.id || '';
                 console.warn(`[sync] ignored ${source} default mock contacts`);
+            } else if (source === 'remote') {
+                state.contacts = [];
+                state.currentContactId = '';
             } else if (!currentHasRealContacts) {
                 state.contacts = [];
                 state.currentContactId = '';
