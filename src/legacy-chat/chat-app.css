@@ -598,8 +598,12 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  max-width: 84%;
+  max-width: 100%;
   min-width: 0;
+}
+
+.message-row.from-ai .message-bubble-col {
+  max-width: calc(100% - 34px);
 }
 
 .message-row.from-user .message-bubble-col {
@@ -651,12 +655,12 @@
   flex-direction: column;
   align-items: flex-start;
   overflow: visible;
-  max-width: 78%;
+  max-width: 80%;
   min-width: 0;
 }
 
 .message-row.from-ai .message-bubble-wrap {
-  max-width: 76%;
+  max-width: 80%;
 }
 
 .bubble-meta-row {
@@ -667,7 +671,7 @@
 }
 
 .bubble-time {
-  font-size: 9.5px;
+  font-size: 8.5px;
   color: rgba(128, 110, 119, 0.58);
   white-space: nowrap;
   font-weight: 650;
@@ -680,13 +684,13 @@
   display: inline-block;
   margin-left: 8px;
   vertical-align: baseline;
-  transform: translateY(1px);
+  transform: translateY(-1px);
 }
 
 .message-bubble > .bubble-time.block-time {
   display: block;
   width: 100%;
-  margin-top: 5px;
+  margin-top: 2px;
   text-align: right;
 }
 
@@ -781,6 +785,12 @@
   color: rgba(80, 70, 98, 0.82);
   background: rgba(238, 235, 248, 0.94);
   border-color: rgba(211, 205, 232, 0.9);
+}
+
+.message-source-badge.claude-code {
+  color: rgba(105, 76, 62, 0.82);
+  background: rgba(248, 238, 230, 0.95);
+  border-color: rgba(232, 211, 198, 0.9);
 }
 
 .message-bubble.from-user {
@@ -2981,7 +2991,7 @@
 @media (max-width: 380px) {
   .chat-app-body { padding-inline: 12px; }
   .room-layout { padding-inline: 8px; }
-  .message-bubble-wrap { max-width: 86%; }
+  .message-bubble-wrap { max-width: 80%; }
 }
 
 

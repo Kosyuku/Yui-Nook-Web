@@ -2072,12 +2072,14 @@
         const msgSource = String(message.source || message.provider || '').toLowerCase();
         const isCodexSource = msgSource === 'codex';
         const isCCSource = msgSource === 'claude-code';
+        const showCodexBadge = isCodexSource && isCodexEnabledForContact(contact);
+        const showCCBadge = isCCSource && isCCEnabledForContact(contact);
         const allowReasoning = !!contact?.settings?.reasoning_visibility;
         const avatar = message.role === 'ai'
             ? `<img class="bubble-avatar" src="${contact.avatar}" alt="${escapeHtml(contact.name)}" />`
             : '';
-        const sourceBadge = message.role === 'ai' && (isCodexSource || isCCSource)
-            ? `<span class="message-source-badge ${isCodexSource ? 'codex' : 'claude-code'}">${isCodexSource ? 'Codex' : 'Claude'}</span>`
+        const sourceBadge = message.role === 'ai' && (showCodexBadge || showCCBadge)
+            ? `<span class="message-source-badge ${showCodexBadge ? 'codex' : 'claude-code'}">${showCodexBadge ? 'Codex' : 'CC'}</span>`
             : '';
         const cotButton = message.role === 'ai' && allowReasoning && message.thinking && !message.typing
             ? `<button class="bubble-cot-btn" data-action="toggle-thinking" data-id="${message.id}" aria-label="\u5c55\u5f00\u72ec\u767d">${icon('bubbleHeart')}</button>`
@@ -2721,7 +2723,7 @@
               </div>
               <span class="row-chevron advanced-chevron ${state.contactPersonaExpanded ? 'open' : ''}">${icon('chevron')}</span>
             </button>
-                <textarea class="ai-textarea persona-textarea contact-persona-textarea ${state.contactPersonaExpanded ? 'expanded' : 'collapsed'}" data-contact-field="persona" rows="${state.contactPersonaExpanded ? '10' : '3'}" placeholder="\u5728\u8fd9\u91cc\u8f93\u5165 AI \u7684\u4eba\u8bbe\u3001\u89d2\u8272\u8bf4\u660e\u3001\u884c\u4e3a\u6307\u4ee4\u3002">${escapeHtml(c.persona || '')}</textarea>
+                <textarea class="ai-textarea persona-textarea contact-persona-textarea ${state.contactPersonaExpanded ? 'expanded' : 'collapsed'}" data-contact-field="persona" rows="${state.contactPersonaExpanded ? '10' : '3'}" style="height:${state.contactPersonaExpanded ? '320px' : '96px'};min-height:${state.contactPersonaExpanded ? '320px' : '96px'};max-height:${state.contactPersonaExpanded ? '58vh' : '96px'};overflow-y:auto;resize:none;" placeholder="\u5728\u8fd9\u91cc\u8f93\u5165 AI \u7684\u4eba\u8bbe\u3001\u89d2\u8272\u8bf4\u660e\u3001\u884c\u4e3a\u6307\u4ee4\u3002">${escapeHtml(c.persona || '')}</textarea>
             ${switchRow('显示推理内容', '仅在模型返回推理内容时显示', s.reasoning_visibility || false, 'toggle-contact', 'reasoning_visibility')}
           </div>
           <div class="settings-group glass-frost ai-panel">
@@ -5188,6 +5190,7 @@
         const createdAt = String(message.created_at || '');
         const content = messageTextValue(message);
         const model = String(message.model || '');
+        const modelKey = model.toLowerCase();
         return normalizeStoredMessage({
             id: message.id || `${contactId}|${role}|${createdAt}|${content}`,
             session_id: message.session_id || '',
@@ -5198,7 +5201,8 @@
             created_at: createdAt,
             time: createdAt ? formatDisplayTime(createdAt, { fallback: '' }) : '',
             model,
-            ...(model.toLowerCase() === 'codex' ? { source: 'codex', provider: 'codex' } : {}),
+            ...(modelKey === 'codex' ? { source: 'codex', provider: 'codex' } : {}),
+            ...(/claude[-_\s]?code/.test(modelKey) ? { source: 'claude-code', provider: 'claude-code' } : {}),
         });
     }
 
