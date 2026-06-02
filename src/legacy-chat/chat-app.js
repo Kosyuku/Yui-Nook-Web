@@ -926,6 +926,7 @@
             camera: `<svg ${common}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>`,
             attach: `<svg ${common}><path d="M12 5v14M5 12h14"/></svg>`,
             quote: `<svg ${common}><path d="M9 7H5v5h4v5H4v-5c0-2.8 1.8-5 5-5zM20 7h-4v5h4v5h-5v-5c0-2.8 1.8-5 5-5z"/></svg>`,
+            copy: `<svg ${common}><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 012-2h10"/></svg>`,
             reroll: `<svg ${common}><path d="M20 11a8 8 0 10-2.3 5.7"/><path d="M20 4v7h-7"/></svg>`,
             cot: `<svg ${common}><path d="M12 4v16M4 12h16"/><path d="M7.5 7.5l9 9M16.5 7.5l-9 9" opacity="0.18"/></svg>`,
             bubbleHeart: `<svg ${common}><path d="M12 19.3s-5.8-3.5-5.8-8a3.7 3.7 0 016.1-2.8 3.7 3.7 0 015.9 2.8c0 4.5-5.6 8-5.6 8z"/></svg>`,
@@ -2087,11 +2088,13 @@
         const cotButton = message.role === 'ai' && allowReasoning && message.thinking && !message.typing
             ? `<button class="bubble-cot-btn" data-action="toggle-thinking" data-id="${message.id}" aria-label="\u5c55\u5f00\u72ec\u767d">${icon('bubbleHeart')}</button>`
             : '';
-        const bottomTools = message.role === 'ai' && !message.typing && !message.streaming
+        const bottomTools = !message.typing && !message.streaming
             ? `
         <div class="bubble-bottom-tools ${state.activeBubbleToolsId === message.id ? 'open' : ''}">
-          <button class="bubble-mini-btn" data-action="reroll-msg" data-id="${message.id}" aria-label="\u91cd\u8bd5">${icon('reroll')}</button>
+          ${message.role === 'ai' ? `<button class="bubble-mini-btn" data-action="reroll-msg" data-id="${message.id}" aria-label="\u91cd\u8bd5">${icon('reroll')}</button>` : ''}
           <button class="bubble-mini-btn" data-action="quote-msg" data-id="${message.id}" aria-label="\u5f15\u7528">${icon('quote')}</button>
+          <button class="bubble-mini-btn" data-action="copy-msg" data-id="${message.id}" aria-label="\u590d\u5236">${icon('copy')}</button>
+          <button class="bubble-mini-btn" data-action="delete-msg" data-id="${message.id}" aria-label="\u5220\u9664">${icon('trash')}</button>
         </div>
       `
             : '';
@@ -2115,7 +2118,7 @@
             ${showSourceMeta ? `<div class="bubble-meta-row">
               ${sourceBadge}
             </div>` : ''}
-            <div class="message-bubble ${roleClass}${bubbleClassExtra}" ${message.role === 'ai' ? `data-msg-id="${message.id}" data-action="toggle-message-tools" data-id="${message.id}"` : ''}>
+            <div class="message-bubble ${roleClass}${bubbleClassExtra}" data-msg-id="${message.id}" data-action="toggle-message-tools" data-id="${message.id}">
               ${cotButton}
               ${(message.typing || (message.streaming && !message.text))
                   ? `<div class="typing-dots"><span></span><span></span><span></span></div>`
@@ -3834,25 +3837,17 @@
         mount.addEventListener('pointerup', handleAvatarCropperPointerUp);
         mount.addEventListener('pointercancel', handleAvatarCropperPointerUp);
 
-        // Long-press AI bubble to quote/reply
+        // Long-press a bubble to open the floating tools.
         let pressTimer;
         const startPress = (e) => {
             if (isEditableTarget(e.target)) return;
-            const bubble = e.target.closest('.message-bubble.from-ai');
+            const bubble = e.target.closest('.message-bubble');
             if (bubble) {
                 pressTimer = window.setTimeout(() => {
                     const msgId = bubble.dataset.msgId;
-                    const current = byId(state.currentContactId);
-                    const msg = current?.messages?.find((item) => item.id === msgId);
-                    if (msg?.text) {
-                        state.quoteMomentId = null;
-                        state.quoteMessageId = msgId;
-                        render();
-                        const input = root()?.querySelector('.chat-input');
-                        if (input) input.focus();
-                    }
                     state.activeBubbleToolsId = msgId;
                     state.suppressBubbleToggle = true;
+                    render();
                     if (navigator.vibrate) navigator.vibrate(50);
                 }, 550);
             }
@@ -4877,6 +4872,14 @@
             }
         }
 
+        if (action === 'copy-msg') {
+            copyChatMessage(target.dataset.id);
+        }
+
+        if (action === 'delete-msg') {
+            deleteChatMessage(target.dataset.id);
+        }
+
         if (action === 'attach-option') {
             state.showAttach = false;
             const label = target.dataset.label || '';
@@ -5195,6 +5198,95 @@
             }
         });
         state.conversations = next;
+    }
+
+    function persistedMessageId(messageId = '') {
+        return String(messageId || '').replace(/__part_\d+$/u, '');
+    }
+
+    function removeMessageFromContact(contact, messageId = '') {
+        const rawId = String(messageId || '').trim();
+        if (!contact || !rawId) return false;
+        const baseId = persistedMessageId(rawId);
+        const before = Array.isArray(contact.messages) ? contact.messages.length : 0;
+        contact.messages = (contact.messages || []).filter((message) => {
+            const id = String(message?.id || '');
+            return id !== rawId && id !== baseId && !id.startsWith(`${baseId}__part_`);
+        });
+        const stored = normalizeConversationMap(state.conversations);
+        stored[contact.id] = (stored[contact.id] || []).filter((message) => {
+            const id = String(message?.id || '');
+            return id !== rawId && id !== baseId && !id.startsWith(`${baseId}__part_`);
+        });
+        state.conversations = stored;
+        const last = contact.messages[contact.messages.length - 1];
+        contact.lastMessage = last?.text || '';
+        contact.lastTime = last?.time || '';
+        if (state.quoteMessageId === rawId || state.quoteMessageId === baseId) state.quoteMessageId = null;
+        if (state.activeBubbleToolsId === rawId || state.activeBubbleToolsId === baseId) state.activeBubbleToolsId = null;
+        return contact.messages.length !== before;
+    }
+
+    async function deleteChatMessage(messageId = '') {
+        const rawId = String(messageId || '').trim();
+        if (!rawId) return;
+        const backendId = persistedMessageId(rawId);
+        const contact = byId(state.currentContactId);
+        if (!contact) return;
+        const snapshot = (contact.messages || []).map((message) => ({ ...message }));
+        removeMessageFromContact(contact, rawId);
+        syncConversationsFromContacts();
+        queueLocalSyncIfChanged(120);
+        render();
+        try {
+            if (backendId) {
+                const resp = await fetch(`${API_BASE}/api/messages/${encodeURIComponent(backendId)}`, { method: 'DELETE' });
+                if (!resp.ok && resp.status !== 404) {
+                    const data = await resp.json().catch(() => ({}));
+                    throw new Error(data.detail || `HTTP ${resp.status}`);
+                }
+            }
+            state.toast = '消息已删除';
+        } catch (error) {
+            contact.messages = snapshot;
+            syncConversationsFromContacts();
+            state.toast = '删除消息失败';
+            console.warn('[message] delete failed', error);
+        }
+        queueLocalSyncIfChanged(120);
+        render();
+        window.setTimeout(() => {
+            state.toast = '';
+            render();
+        }, 1200);
+    }
+
+    async function copyChatMessage(messageId = '') {
+        const rawId = String(messageId || '').trim();
+        const contact = byId(state.currentContactId);
+        const message = contact?.messages?.find((item) => String(item?.id || '') === rawId);
+        const text = messageTextValue(message || {});
+        if (!text) return;
+        try {
+            await navigator.clipboard?.writeText(text);
+            state.toast = '已复制';
+        } catch {
+            const area = document.createElement('textarea');
+            area.value = text;
+            area.style.position = 'fixed';
+            area.style.opacity = '0';
+            document.body.appendChild(area);
+            area.select();
+            document.execCommand('copy');
+            area.remove();
+            state.toast = '已复制';
+        }
+        state.activeBubbleToolsId = null;
+        render();
+        window.setTimeout(() => {
+            state.toast = '';
+            render();
+        }, 1000);
     }
 
     function hydrateContactsFromConversations() {
