@@ -577,12 +577,15 @@
         for (let i = 0; i < list.length; i += 1) {
             if (state.assistantPlayback.token !== token) return;
             const msg = {
-                id: `ai_chunk_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`,
+                id: options.baseId ? `${options.baseId}__part_${i}` : `ai_chunk_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`,
                 role: 'ai',
                 text: list[i],
                 content: list[i],
                 time: nowTimeStr(),
                 created_at: new Date().toISOString(),
+                ...(options.agentId ? { agent_id: options.agentId } : {}),
+                ...(options.source ? { source: options.source } : {}),
+                ...(options.provider ? { provider: options.provider } : {}),
             };
             if (i === 0) {
                 if (options.thinking) msg.thinking = options.thinking;
@@ -1584,7 +1587,7 @@
         }
 
         const chatInput = root()?.querySelector('.chat-input');
-        if (chatInput) chatInput.value = '';
+        if (chatInput) setChatInputText(chatInput, '');
     }
 
     async function deleteContactSafe(contactId) {
@@ -2032,7 +2035,7 @@
           <input id="chat-image-input" class="moment-image-input" type="file" accept="image/*" multiple />
           <div class="composer-card">
             <div class="composer-input-wrap">
-              <input class="chat-input" placeholder="\u8f93\u5165\u6d88\u606f..." value="" />
+              <div class="chat-input" contenteditable="true" role="textbox" aria-label="\u8f93\u5165\u6d88\u606f" data-placeholder="\u8f93\u5165\u6d88\u606f..." data-empty="true"></div>
             </div>
             <button class="icon-btn icon-circle soft-mini" data-action="expand-actions" aria-label="\u9644\u4ef6">${icon('attach')}</button>
             ${state.streamingAbortController
@@ -2540,7 +2543,7 @@
         <div class="rp-composer">
           <div class="composer-card">
             <div class="composer-input-wrap">
-              <input class="chat-input" placeholder="\u8f93\u5165\u5267\u60c5..." value="" />
+              <div class="chat-input" contenteditable="true" role="textbox" aria-label="\u8f93\u5165\u5267\u60c5" data-placeholder="\u8f93\u5165\u5267\u60c5..." data-empty="true"></div>
             </div>
             ${state.streamingAbortController
                 ? `<button class="icon-btn send-round send-stop-active" data-action="fake-send" aria-label="\u505c\u6b62">${icon('stop')}</button>`
@@ -3563,13 +3566,78 @@
         }
     }
 
+    function updateChatInputEmptyState(input) {
+        if (!input?.classList?.contains('chat-input')) return;
+        const text = getChatInputText(input);
+        input.dataset.empty = text.trim() ? 'false' : 'true';
+    }
+
+    function getChatInputText(input) {
+        if (!input) return '';
+        if (input.isContentEditable) {
+            return String(input.innerText || input.textContent || '').replace(/\u00a0/g, ' ');
+        }
+        return String(input.value || '');
+    }
+
+    function setChatInputText(input, text = '') {
+        if (!input) return;
+        const next = String(text || '');
+        if (input.isContentEditable) {
+            input.textContent = next;
+        } else {
+            input.value = next;
+        }
+        updateChatInputEmptyState(input);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function selectionBelongsToInput(input) {
+        const selection = window.getSelection?.();
+        if (!input || !selection || !selection.rangeCount) return false;
+        const range = selection.getRangeAt(0);
+        return input.contains(range.commonAncestorContainer);
+    }
+
+    function placeCaretAtEnd(input) {
+        if (!input?.isContentEditable) return;
+        input.focus();
+        const range = document.createRange();
+        range.selectNodeContents(input);
+        range.collapse(false);
+        const selection = window.getSelection?.();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+    }
+
     function insertPlainTextIntoInput(input, text) {
         if (!input || !text) return;
+        const nextText = String(text);
+        if (input.isContentEditable) {
+            input.focus();
+            if (!selectionBelongsToInput(input)) placeCaretAtEnd(input);
+            const selection = window.getSelection?.();
+            if (selection?.rangeCount) {
+                const range = selection.getRangeAt(0);
+                range.deleteContents();
+                const node = document.createTextNode(nextText);
+                range.insertNode(node);
+                range.setStartAfter(node);
+                range.setEndAfter(node);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            } else {
+                input.append(document.createTextNode(nextText));
+            }
+            updateChatInputEmptyState(input);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            return;
+        }
         const value = String(input.value || '');
         const start = typeof input.selectionStart === 'number' ? input.selectionStart : value.length;
         const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
-        input.value = `${value.slice(0, start)}${text}${value.slice(end)}`;
-        const nextPos = start + text.length;
+        input.value = `${value.slice(0, start)}${nextText}${value.slice(end)}`;
+        const nextPos = start + nextText.length;
         input.setSelectionRange?.(nextPos, nextPos);
         input.dispatchEvent(new Event('input', { bubbles: true }));
     }
@@ -3841,6 +3909,7 @@
         const chatInput = mount.querySelector('.chat-input');
         if (chatInput) {
             chatInput.addEventListener('paste', handleChatInputPaste);
+            chatInput.addEventListener('input', () => updateChatInputEmptyState(chatInput));
             chatInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -4769,7 +4838,8 @@
                 add_note: '\u5e2e\u6211\u8bb0\u4e00\u6761\u4fbf\u7b7e',
                 list_notes: '\u5e2e\u6211\u770b\u770b\u6700\u8fd1\u4fbf\u7b7e',
             };
-            if (input) input.value = mcpAction?.prompt || map[mcpAction?.mcpToolId || actionId] || map[actionId] || `${mcpAction?.label || ''}`.trim();
+            if (input) setChatInputText(input, mcpAction?.prompt || map[mcpAction?.mcpToolId || actionId] || map[actionId] || `${mcpAction?.label || ''}`.trim());
+            placeCaretAtEnd(input);
         }
 
         if (action === 'fake-send') {
@@ -4992,7 +5062,7 @@
         const right = normalizeStoredMessage(b);
         if (left.role !== right.role) return false;
         if (messageTextValue(left) !== messageTextValue(right)) return false;
-        if ((left.session_id || right.session_id) && left.session_id !== right.session_id) return false;
+        if (left.session_id && right.session_id && left.session_id !== right.session_id) return false;
         const at = comparableTime(left.created_at || left.timestamp);
         const bt = comparableTime(right.created_at || right.timestamp);
         if (at && bt) return Math.abs(at - bt) <= 2 * 60 * 1000;
@@ -6038,7 +6108,7 @@
 
     async function doSendRpMessage() {
         const input = root()?.querySelector('.chat-input');
-        const text = input?.value?.trim();
+        const text = getChatInputText(input).trim();
         if (!text || !state.currentRpRoomId) return;
         const c = byId(state.currentContactId) || state.contacts[0];
         const room = getCurrentRpRoom();
@@ -6047,7 +6117,7 @@
 
         const userId = `rp_u_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         upsertMessage(state.currentRpMessages, { id: userId, client_message_id: userId, role: 'user', text, content: text, time: nowTimeStr(), timestamp: new Date().toISOString(), created_at: new Date().toISOString() });
-        input.value = '';
+        setChatInputText(input, '');
         const aiId = 'rp_ai_' + Date.now();
         state.currentRpMessages.push({ id: aiId, role: 'ai', text: '', content: '', time: '', created_at: new Date().toISOString(), typing: true });
         if (state.currentRpRoomId) state.rpMessages[state.currentRpRoomId] = state.currentRpMessages.map(normalizeStoredMessage);
@@ -6188,7 +6258,7 @@
 
     async function doSendCCMessage() {
         const input = root()?.querySelector('.chat-input');
-        const rawText = input?.value?.trim() || '';
+        const rawText = getChatInputText(input).trim();
         const attachments = (state.chatAttachments || []).map(serializeChatAttachment).filter(Boolean);
         if (!rawText && !attachments.length) return;
         const text = attachmentRequestText(rawText, attachments);
@@ -6197,10 +6267,10 @@
         cancelAssistantPlayback();
 
         const msgId = `u_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        upsertMessage(c.messages, { id: msgId, client_message_id: msgId, role: 'user', text: rawText, content: rawText, attachments, time: nowTimeStr(), created_at: new Date().toISOString() });
+        upsertMessage(c.messages, { id: msgId, client_message_id: msgId, agent_id: c.id, role: 'user', text: rawText, content: rawText, attachments, time: nowTimeStr(), created_at: new Date().toISOString() });
         c.lastMessage = attachmentLastMessage(rawText, attachments);
         c.lastTime = '刚刚';
-        input.value = '';
+        setChatInputText(input, '');
         state.chatAttachments = [];
 
         const aiId = 'ai_' + Date.now();
@@ -6212,7 +6282,9 @@
             time: '',
             created_at: new Date().toISOString(),
             typing: true,
+            agent_id: c.id,
             source: 'claude-code',
+            provider: 'claude-code',
         });
 
         syncConversationsFromContacts();
@@ -6257,18 +6329,34 @@
             }
             const idx = c.messages.findIndex((m) => m.id === aiId);
             if (idx !== -1 && reply) {
-                c.messages[idx] = {
-                    ...(persistedAssistant ? contactMessageFromStored(persistedAssistant) : {}),
-                    id: persistedAssistant?.id || aiId,
-                    role: 'ai',
-                    text: reply,
-                    content: reply,
-                    source: 'claude-code',
-                    provider: 'claude-code',
-                    time: persistedAssistant?.time || nowTimeStr(),
-                    created_at: persistedAssistant?.created_at || new Date().toISOString(),
-                    typing: false,
-                };
+                const chunks = splitAssistantReply(reply);
+                if (chunks.length > 1) {
+                    c.messages.splice(idx, 1);
+                    render();
+                    scrollToBottom();
+                    await wait(120);
+                    await playAssistantChunks(c, chunks, {
+                        startIndex: idx,
+                        baseId: persistedAssistant?.id || aiId,
+                        agentId: c.id,
+                        source: 'claude-code',
+                        provider: 'claude-code',
+                    });
+                } else {
+                    c.messages[idx] = {
+                        ...(persistedAssistant ? contactMessageFromStored(persistedAssistant) : {}),
+                        id: persistedAssistant?.id || aiId,
+                        role: 'ai',
+                        text: normalizeBubbleText(reply),
+                        content: normalizeBubbleText(reply),
+                        agent_id: c.id,
+                        source: 'claude-code',
+                        provider: 'claude-code',
+                        time: persistedAssistant?.time || nowTimeStr(),
+                        created_at: persistedAssistant?.created_at || new Date().toISOString(),
+                        typing: false,
+                    };
+                }
             } else if (idx !== -1) {
                 c.messages.splice(idx, 1);
             }
@@ -6311,7 +6399,7 @@
 
     async function doSendCodexMessage() {
         const input = root()?.querySelector('.chat-input');
-        const rawText = input?.value?.trim() || '';
+        const rawText = getChatInputText(input).trim();
         const attachments = (state.chatAttachments || []).map(serializeChatAttachment).filter(Boolean);
         if (!rawText && !attachments.length) return;
         const text = attachmentRequestText(rawText, attachments);
@@ -6320,10 +6408,10 @@
         cancelAssistantPlayback();
 
         const msgId = `u_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        upsertMessage(c.messages, { id: msgId, client_message_id: msgId, role: 'user', text: rawText, content: rawText, attachments, time: nowTimeStr(), created_at: new Date().toISOString() });
+        upsertMessage(c.messages, { id: msgId, client_message_id: msgId, agent_id: c.id, role: 'user', text: rawText, content: rawText, attachments, time: nowTimeStr(), created_at: new Date().toISOString() });
         c.lastMessage = attachmentLastMessage(rawText, attachments);
         c.lastTime = '\u521a\u521a';
-        input.value = '';
+        setChatInputText(input, '');
         state.chatAttachments = [];
 
         const aiId = 'ai_' + Date.now();
@@ -6335,7 +6423,9 @@
             time: '',
             created_at: new Date().toISOString(),
             typing: true,
+            agent_id: c.id,
             source: 'codex',
+            provider: 'codex',
         });
 
         syncConversationsFromContacts();
@@ -6380,18 +6470,34 @@
             }
             const idx = c.messages.findIndex((m) => m.id === aiId);
             if (idx !== -1 && reply) {
-                c.messages[idx] = {
-                    ...(persistedAssistant ? contactMessageFromStored(persistedAssistant) : {}),
-                    id: persistedAssistant?.id || aiId,
-                    role: 'ai',
-                    text: reply,
-                    content: reply,
-                    source: 'codex',
-                    provider: 'codex',
-                    time: persistedAssistant?.time || nowTimeStr(),
-                    created_at: persistedAssistant?.created_at || new Date().toISOString(),
-                    typing: false,
-                };
+                const chunks = splitAssistantReply(reply);
+                if (chunks.length > 1) {
+                    c.messages.splice(idx, 1);
+                    render();
+                    scrollToBottom();
+                    await wait(120);
+                    await playAssistantChunks(c, chunks, {
+                        startIndex: idx,
+                        baseId: persistedAssistant?.id || aiId,
+                        agentId: c.id,
+                        source: 'codex',
+                        provider: 'codex',
+                    });
+                } else {
+                    c.messages[idx] = {
+                        ...(persistedAssistant ? contactMessageFromStored(persistedAssistant) : {}),
+                        id: persistedAssistant?.id || aiId,
+                        role: 'ai',
+                        text: normalizeBubbleText(reply),
+                        content: normalizeBubbleText(reply),
+                        agent_id: c.id,
+                        source: 'codex',
+                        provider: 'codex',
+                        time: persistedAssistant?.time || nowTimeStr(),
+                        created_at: persistedAssistant?.created_at || new Date().toISOString(),
+                        typing: false,
+                    };
+                }
             } else if (idx !== -1) {
                 c.messages.splice(idx, 1);
             }
@@ -6717,7 +6823,7 @@
     //  Send message (SSE streaming)
     async function doSendMessage() {
         const input = root()?.querySelector('.chat-input');
-        const rawText = input?.value?.trim() || '';
+        const rawText = getChatInputText(input).trim();
         const attachments = (state.chatAttachments || []).map(serializeChatAttachment).filter(Boolean);
         if (!rawText && !attachments.length) return;
         const requestText = attachmentRequestText(rawText, attachments);
@@ -6737,7 +6843,7 @@
         upsertMessage(c.messages, { id: uMsgId, client_message_id: uMsgId, session_id: sessionId, agent_id: c.id, role: 'user', text: rawText, content: rawText, attachments, time: nowTimeStr(), created_at: new Date().toISOString() });
         c.lastMessage = attachmentLastMessage(rawText, attachments);
         c.lastTime = '\u521a\u521a';
-        input.value = '';
+        setChatInputText(input, '');
         state.chatAttachments = [];
         syncConversationsFromContacts();
         queueLocalSyncIfChanged(120);

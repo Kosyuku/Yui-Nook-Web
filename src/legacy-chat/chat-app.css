@@ -1359,16 +1359,18 @@
 }
 
 .composer-input-wrap {
-  flex: 1;
-  min-width: 0;
-  background: rgba(255, 255, 255, 0.96);
-  border-radius: 999px;
-  padding: 0 12px;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  border: 1px solid rgba(232, 219, 225, 0.96);
-  box-shadow: 0 3px 10px rgba(181,146,159,.06);
+    flex: 1;
+    min-width: 0;
+    background: rgba(255, 255, 255, 0.96);
+    border-radius: 999px;
+    padding: 0 12px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    overflow: hidden;
+    border: 1px solid rgba(232, 219, 225, 0.96);
+    box-shadow: 0 3px 10px rgba(181,146,159,.06);
 }
 
 .composer-card .soft-mini {
@@ -1434,14 +1436,39 @@
 
 .chat-input,
 .sheet-input {
-  width: 100%;
-  height: 34px;
-  border: none;
-  outline: none;
-  background: transparent;
-  font: inherit;
-  font-size: 13px;
-  color: rgba(64, 50, 56, 0.96);
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    font: inherit;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 34px;
+    padding: 0;
+    margin: 0;
+    display: block;
+    box-sizing: border-box;
+    text-align: left;
+    direction: ltr;
+    unicode-bidi: plaintext;
+    white-space: nowrap;
+    overflow: hidden;
+    appearance: none;
+    -webkit-appearance: none;
+    caret-color: rgba(64, 50, 56, 0.88);
+    color: rgba(64, 50, 56, 0.96);
+}
+
+.chat-input[contenteditable="true"] {
+    position: relative;
+}
+
+.chat-input[contenteditable="true"][data-empty="true"]::before {
+    content: attr(data-placeholder);
+    color: rgba(156, 131, 140, 0.72);
+    pointer-events: none;
 }
 
 .chat-input::placeholder,
@@ -5884,6 +5911,10 @@ button.model-choice-item {
 #chat-app-root[data-theme] .sheet-input::placeholder,
 #chat-app-root[data-theme] textarea::placeholder,
 #chat-app-root[data-theme] input::placeholder {
+  color: var(--chat-ui-muted);
+}
+
+#chat-app-root[data-theme] .chat-input[contenteditable="true"][data-empty="true"]::before {
   color: var(--chat-ui-muted);
 }
 
