@@ -244,6 +244,7 @@
         quickActionDropDirection: '',
         contactPersonaExpanded: false,
         contactModelAdvancedOpen: false,
+        chatInputDraft: '',
         chatAttachments: [],
         chatPasteError: '',
         contactSyncAuthoritative: false,
@@ -1670,6 +1671,7 @@
 
         const chatInput = root()?.querySelector('.chat-input');
         if (chatInput) setChatInputText(chatInput, '');
+        state.chatInputDraft = '';
     }
 
     async function deleteContactSafe(contactId) {
@@ -3657,6 +3659,16 @@
         input.dataset.empty = text.trim() ? 'false' : 'true';
     }
 
+    function restoreChatInputDraft(input) {
+        if (!input?.classList?.contains('chat-input')) return;
+        const draft = String(state.chatInputDraft || '');
+        if (getChatInputText(input) !== draft) {
+            setChatInputText(input, draft);
+        } else {
+            updateChatInputEmptyState(input);
+        }
+    }
+
     function getChatInputText(input) {
         if (!input) return '';
         if (input.isContentEditable) {
@@ -3999,6 +4011,20 @@
         // Enter to send
         const chatInput = mount.querySelector('.chat-input');
         if (chatInput) {
+            const inputWrap = chatInput.closest('.composer-input-wrap');
+            if (inputWrap && inputWrap.dataset.focusBound !== '1') {
+                inputWrap.dataset.focusBound = '1';
+                inputWrap.addEventListener('pointerdown', (event) => {
+                    if (event.target === chatInput || event.target.closest('[data-action]')) return;
+                    event.preventDefault();
+                    placeCaretAtEnd(chatInput);
+                });
+                inputWrap.addEventListener('click', (event) => {
+                    if (event.target === chatInput || event.target.closest('[data-action]')) return;
+                    placeCaretAtEnd(chatInput);
+                });
+            }
+            restoreChatInputDraft(chatInput);
             chatInput.addEventListener('paste', handleChatInputPaste);
             chatInput.addEventListener('input', () => updateChatInputEmptyState(chatInput));
             chatInput.addEventListener('keydown', (e) => {
@@ -4996,6 +5022,9 @@
                 ...(target.id === 'nc-agent-id' ? { agentId: target.value || '' } : {}),
                 ...(target.id === 'nc-bio' ? { bio: target.value || '' } : {}),
             };
+        }
+        if (target?.classList?.contains('chat-input')) {
+            state.chatInputDraft = getChatInputText(target);
         }
         if (target.dataset.action === 'slide-contact') {
             const c = byId(state.currentContactId);
@@ -6460,6 +6489,7 @@
         const userId = `rp_u_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         upsertMessage(state.currentRpMessages, { id: userId, client_message_id: userId, role: 'user', text, content: text, time: nowTimeStr(), timestamp: new Date().toISOString(), created_at: new Date().toISOString() });
         setChatInputText(input, '');
+        state.chatInputDraft = '';
         const aiId = 'rp_ai_' + Date.now();
         state.currentRpMessages.push({ id: aiId, role: 'ai', text: '', content: '', time: '', created_at: new Date().toISOString(), typing: true });
         if (state.currentRpRoomId) state.rpMessages[state.currentRpRoomId] = state.currentRpMessages.map(normalizeStoredMessage);
@@ -6613,6 +6643,7 @@
         c.lastMessage = attachmentLastMessage(rawText, attachments);
         c.lastTime = '刚刚';
         setChatInputText(input, '');
+        state.chatInputDraft = '';
         state.chatAttachments = [];
 
         const aiId = 'ai_' + Date.now();
@@ -6877,6 +6908,7 @@
         c.lastMessage = attachmentLastMessage(rawText, attachments);
         c.lastTime = '\u521a\u521a';
         setChatInputText(input, '');
+        state.chatInputDraft = '';
         state.chatAttachments = [];
 
         const aiId = 'ai_' + Date.now();
@@ -7344,6 +7376,7 @@
         c.lastMessage = attachmentLastMessage(rawText, attachments);
         c.lastTime = '\u521a\u521a';
         setChatInputText(input, '');
+        state.chatInputDraft = '';
         state.chatAttachments = [];
         // Buffer: debounce AI request, extend timer while user is typing
         if (!_chatMsgBuffers[c.id]) _chatMsgBuffers[c.id] = { texts: [], timer: null, listener: null };
