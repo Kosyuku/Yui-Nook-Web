@@ -1649,6 +1649,27 @@
         return canToggleCCForContact(contact) && !!contact?.settings?.ccEnabled;
     }
 
+    const DEFAULT_CONTACT_AVATAR = 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&q=80';
+
+    function isDefaultContactAvatar(value) {
+        return !value || String(value) === DEFAULT_CONTACT_AVATAR;
+    }
+
+    function isAgentProfileContact(contact = {}) {
+        return String(contact.profileSource || contact._profileSource || '').toLowerCase() === 'agent';
+    }
+
+    function contactProfileField(existing, incoming, key) {
+        if (isAgentProfileContact(incoming) && incoming[key]) return incoming[key];
+        return existing[key] || incoming[key] || '';
+    }
+
+    function contactAvatarField(existing, incoming) {
+        if (isAgentProfileContact(incoming) && incoming.avatar) return incoming.avatar;
+        if (isDefaultContactAvatar(existing.avatar) && incoming.avatar) return incoming.avatar;
+        return existing.avatar || incoming.avatar || DEFAULT_CONTACT_AVATAR;
+    }
+
     function contactDefaults(contact = {}) {
         const id = String(contact.id || '').trim() || `c${Date.now()}`;
         const chatTheme = getContactChatThemeKey(contact);
@@ -1668,7 +1689,8 @@
             pinned: !!contact.pinned,
             lastMessage: String(contact.lastMessage || ''),
             lastTime: String(contact.lastTime || ''),
-            avatar: String(contact.avatar || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&q=80'),
+            avatar: String(contact.avatar || DEFAULT_CONTACT_AVATAR),
+            profileSource: String(contact.profileSource || contact._profileSource || ''),
             topics: Array.isArray(contact.topics) ? contact.topics : [],
             messages: Array.isArray(contact.messages) ? contact.messages : [],
             settings: {
@@ -1739,6 +1761,31 @@
             return false;
         } catch (error) {
             console.warn('[agents] register contact failed', error);
+            return false;
+        }
+    }
+
+    async function saveContactProfileToAgent(contact) {
+        if (!contact?.id) return false;
+        const payload = {
+            display_name: contact.name || contact.display_name || contact.id,
+            avatar: contact.avatar || '',
+            description: contact.bio || '',
+            source: contact.roleTag || 'murmur',
+            is_active: true,
+        };
+        try {
+            const resp = await fetch(`${API_BASE}/api/agents/${encodeURIComponent(contact.id)}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (resp.ok) return true;
+            if (resp.status === 404) return registerAgentForContact(contact);
+            console.warn('[agents] profile save failed', resp.status);
+            return false;
+        } catch (error) {
+            console.warn('[agents] profile save failed', error);
             return false;
         }
     }
@@ -3656,6 +3703,8 @@
                 const c = byId(state.currentContactId);
                 if (c) {
                     c.avatar = nextAvatar;
+                    c.profileSource = 'agent';
+                    await saveContactProfileToAgent(c);
                     queueLocalSyncIfChanged(120);
                 }
             }
@@ -5063,13 +5112,14 @@
                 ...existing,
                 id: existing.id || contact.id,
                 agent_id: existing.agent_id || contact.agent_id || existing.id || contact.id,
-                name: existing.name || contact.name,
-                display_name: existing.display_name || existing.name || contact.display_name || contact.name,
-                bio: existing.bio || contact.bio,
+                name: contactProfileField(existing, contact, 'name'),
+                display_name: contactProfileField(existing, contact, 'display_name') || contactProfileField(existing, contact, 'name'),
+                bio: contactProfileField(existing, contact, 'bio'),
                 status: existing.status || contact.status,
-                handle: existing.handle || contact.handle,
-                roleTag: existing.roleTag || contact.roleTag,
-                avatar: existing.avatar || contact.avatar,
+                handle: contactProfileField(existing, contact, 'handle'),
+                roleTag: contactProfileField(existing, contact, 'roleTag'),
+                avatar: contactAvatarField(existing, contact),
+                profileSource: isAgentProfileContact(contact) ? 'agent' : (existing.profileSource || contact.profileSource || ''),
                 settings: { ...(contact.settings || {}), ...(existing.settings || {}) },
                 messages: messages.map(contactMessageFromStored),
                 lastMessage: existing.lastMessage || contact.lastMessage || messages[messages.length - 1]?.content || '',
@@ -5588,6 +5638,7 @@
             handle: String(agent.display_handle || `@${id}`),
             roleTag: String(agent.source || 'agent'),
             avatar: String(agent.avatar || '').trim(),
+            profileSource: 'agent',
             pinned: false,
             unread: 0,
             lastMessage: '',
