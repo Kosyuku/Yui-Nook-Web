@@ -247,6 +247,8 @@
         chatAttachments: [],
         chatPasteError: '',
         contactSyncAuthoritative: false,
+        deletedContactIds: [],
+        restoredContactIds: [],
         companionState: {
             recent_topics: [],
             current_mood: '',
@@ -1560,6 +1562,7 @@
         const normalizedId = String(contactId || '').trim();
         if (!normalizedId) return;
 
+        rememberDeletedContactId(normalizedId);
         cancelAssistantPlayback?.('contact-deleted');
         if (state.streamingAbortController && state.currentContactId === normalizedId) {
             state.streamingAbortController.abort();
@@ -1570,7 +1573,7 @@
             agentPersonaSaveTimers.delete(normalizedId);
         }
 
-        state.contacts = state.contacts.filter((item) => item.id !== normalizedId);
+        state.contacts = state.contacts.filter((item) => normalizeContactIdValue(item.id) !== normalizeContactIdValue(normalizedId));
         state.activeBubbleToolsId = null;
         state.quoteMomentId = null;
         state.quoteMessageId = null;
@@ -1725,6 +1728,7 @@
 
     function mergeContact(contact) {
         const normalized = contactDefaults(contact);
+        clearDeletedContactId(normalized.id);
         const idx = state.contacts.findIndex((item) => String(item.id || '').toLowerCase() === normalized.id.toLowerCase());
         if (idx >= 0) {
             state.contacts[idx] = { ...state.contacts[idx], ...normalized };
@@ -5010,6 +5014,8 @@
         }
         return sanitizeSyncPayload({
             contacts: state.contacts,
+            deletedContactIds: state.deletedContactIds,
+            restoredContactIds: state.restoredContactIds,
             moments: state.moments,
             actions: state.actions,
             globalSettings: state.globalSettings,
@@ -5658,6 +5664,47 @@
         return contacts.filter((contact) => !isDefaultMockContact(contact));
     }
 
+    function normalizeContactIdValue(value) {
+        return String(value || '').trim().toLowerCase();
+    }
+
+    function normalizeDeletedContactIds(value) {
+        if (!Array.isArray(value)) return [];
+        return [...new Set(value.map(normalizeContactIdValue).filter(Boolean))];
+    }
+
+    function deletedContactIdSet(extra = []) {
+        return new Set(normalizeDeletedContactIds([...(state.deletedContactIds || []), ...(extra || [])]));
+    }
+
+    function isDeletedContactId(contactId, extra = []) {
+        const id = normalizeContactIdValue(contactId);
+        return !!id && deletedContactIdSet(extra).has(id);
+    }
+
+    function filterDeletedContacts(contacts, extraDeletedIds = []) {
+        const deleted = deletedContactIdSet(extraDeletedIds);
+        if (!Array.isArray(contacts)) return [];
+        if (!deleted.size) return contacts;
+        return contacts.filter((contact) => !deleted.has(normalizeContactIdValue(contact?.id || contact?.agent_id)));
+    }
+
+    function rememberDeletedContactId(contactId) {
+        const id = normalizeContactIdValue(contactId);
+        if (!id) return;
+        state.deletedContactIds = normalizeDeletedContactIds([...(state.deletedContactIds || []), id]);
+    }
+
+    function clearDeletedContactId(contactId) {
+        const id = normalizeContactIdValue(contactId);
+        if (!id) return;
+        const before = normalizeDeletedContactIds(state.deletedContactIds);
+        state.deletedContactIds = before.filter((item) => item !== id);
+        if (before.length !== state.deletedContactIds.length) {
+            state.restoredContactIds = normalizeDeletedContactIds([...(state.restoredContactIds || []), id]);
+        }
+    }
+
     function isDefaultMockContacts(contacts) {
         return Array.isArray(contacts) && contacts.length > 0 && contacts.every((contact) => isDefaultMockContact(contact));
     }
@@ -5665,8 +5712,14 @@
     function sanitizeSyncPayload(payload = {}) {
         if (!payload || typeof payload !== 'object') return {};
         const next = { ...payload };
+        next.deletedContactIds = normalizeDeletedContactIds(next.deletedContactIds);
+        next.restoredContactIds = normalizeDeletedContactIds(next.restoredContactIds);
+        if (next.restoredContactIds.length) {
+            const restored = new Set(next.restoredContactIds);
+            next.deletedContactIds = next.deletedContactIds.filter((id) => !restored.has(id));
+        }
         if (Array.isArray(next.contacts)) {
-            next.contacts = filterDefaultMockContacts(next.contacts).map((contact) => contactDefaults(contact));
+            next.contacts = filterDeletedContacts(filterDefaultMockContacts(next.contacts), next.deletedContactIds).map((contact) => contactDefaults(contact));
         }
         if (next.conversations && typeof next.conversations === 'object') {
             next.conversations = normalizeConversationMap(next.conversations);
@@ -5713,12 +5766,30 @@
 
     function applyLocalPayload(payload, { source = 'local' } = {}) {
         if (!payload || typeof payload !== 'object') return;
+        const incomingDeletedContactIds = normalizeDeletedContactIds(payload.deletedContactIds);
+        const incomingRestoredContactIds = normalizeDeletedContactIds(payload.restoredContactIds);
+        if (incomingRestoredContactIds.length) {
+            const restored = new Set(incomingRestoredContactIds);
+            state.deletedContactIds = normalizeDeletedContactIds(state.deletedContactIds).filter((id) => !restored.has(id));
+            state.restoredContactIds = normalizeDeletedContactIds([...(state.restoredContactIds || []), ...incomingRestoredContactIds]);
+        }
+        if (incomingDeletedContactIds.length) {
+            const restored = new Set(incomingRestoredContactIds);
+            state.deletedContactIds = normalizeDeletedContactIds([
+                ...(state.deletedContactIds || []),
+                ...incomingDeletedContactIds.filter((id) => !restored.has(id)),
+            ]);
+            state.contacts = filterDeletedContacts(state.contacts);
+            if (isDeletedContactId(state.currentContactId)) state.currentContactId = state.contacts[0]?.id || '';
+        } else {
+            state.deletedContactIds = normalizeDeletedContactIds(state.deletedContactIds);
+        }
         if (source === 'remote' && Array.isArray(payload.contacts)) {
             state.contactSyncAuthoritative = true;
         }
         if (Array.isArray(payload.contacts)) {
             const rawContacts = payload.contacts.map((contact) => contactDefaults(contact));
-            const nextContacts = filterDefaultMockContacts(rawContacts).map((contact) => contactDefaults(contact));
+            const nextContacts = filterDeletedContacts(filterDefaultMockContacts(rawContacts), incomingDeletedContactIds).map((contact) => contactDefaults(contact));
             const currentHasRealContacts = contactsHaveRealData(state.contacts);
             if (nextContacts.length) {
                 state.contacts = source === 'remote'
@@ -5942,7 +6013,8 @@
                 .filter((agent) => agent?.is_active !== false)
                 .map(agentToContact)
                 .filter(Boolean)
-                .filter((contact) => !isDefaultMockContact(contact));
+                .filter((contact) => !isDefaultMockContact(contact))
+                .filter((contact) => !isDeletedContactId(contact.id));
             console.info('[agents] loaded', contacts.map((contact) => ({
                 id: contact.id,
                 name: contact.name,
@@ -5950,7 +6022,21 @@
             })));
             if (!contacts.length) return;
             if (state.contactSyncAuthoritative && contactsHaveRealData(state.contacts)) {
+                const existingIds = new Set(state.contacts.map((contact) => normalizeContactIdValue(contact.id)).filter(Boolean));
+                const existingProfileUpdates = contacts.filter((contact) => existingIds.has(normalizeContactIdValue(contact.id)));
+                if (!existingProfileUpdates.length) {
+                    void hydrateVisibleContactHistories(state.contacts);
+                    return;
+                }
+                const beforeHash = snapshotHash({ contacts: state.contacts });
+                state.contacts = mergeContacts(state.contacts, existingProfileUpdates);
+                hydrateContactsFromConversations();
+                if (snapshotHash({ contacts: state.contacts }) !== beforeHash) {
+                    persistLocalSnapshot();
+                    scheduleSyncPush(100);
+                }
                 void hydrateVisibleContactHistories(state.contacts);
+                render();
                 return;
             }
             const beforeHash = snapshotHash({ contacts: state.contacts });
@@ -5981,7 +6067,8 @@
             const data = await resp.json().catch(() => ({}));
             const contacts = (Array.isArray(data?.agents) ? data.agents : [])
                 .map(messageAgentToContact)
-                .filter(Boolean);
+                .filter(Boolean)
+                .filter((contact) => !isDeletedContactId(contact.id));
             console.info('[murmur] message agents loaded', contacts.map((contact) => ({
                 id: contact.id,
                 lastMessage: contact.lastMessage,
@@ -5989,7 +6076,21 @@
             })));
             if (!contacts.length) return;
             if (state.contactSyncAuthoritative && contactsHaveRealData(state.contacts)) {
+                const existingIds = new Set(state.contacts.map((contact) => normalizeContactIdValue(contact.id)).filter(Boolean));
+                const existingRecovered = contacts.filter((contact) => existingIds.has(normalizeContactIdValue(contact.id)));
+                if (!existingRecovered.length) {
+                    void hydrateVisibleContactHistories(state.contacts);
+                    return;
+                }
+                const beforeHash = snapshotHash({ contacts: state.contacts });
+                state.contacts = mergeContacts(state.contacts, existingRecovered);
+                hydrateContactsFromConversations();
+                if (snapshotHash({ contacts: state.contacts }) !== beforeHash) {
+                    persistLocalSnapshot();
+                    scheduleSyncPush(100);
+                }
                 void hydrateVisibleContactHistories(state.contacts);
+                render();
                 return;
             }
             const beforeHash = snapshotHash({ contacts: state.contacts });
@@ -6013,7 +6114,7 @@
         const probeIds = Array.from(new Set([
             ...CONTACTS.map((contact) => normalizeNewContactAgentId(contact.id)).filter(Boolean),
             ...state.contacts.map((contact) => normalizeNewContactAgentId(contact.id)).filter(Boolean),
-        ]));
+        ])).filter((agentId) => !isDeletedContactId(agentId));
         const recovered = [];
         for (const agentId of probeIds) {
             if (!agentId) continue;
@@ -6036,13 +6137,17 @@
                 if (!silent) console.warn('[murmur] message probe failed', agentId, error);
             }
         }
-        const contacts = recovered.filter(Boolean);
+        const contacts = recovered.filter(Boolean).filter((contact) => !isDeletedContactId(contact.id));
         console.info('[murmur] message agents probed', contacts.map((contact) => ({
             id: contact.id,
             lastMessage: contact.lastMessage,
             count: contact.messageCount || 0,
         })));
         if (!contacts.length) return;
+        if (state.contactSyncAuthoritative && contactsHaveRealData(state.contacts)) {
+            void hydrateVisibleContactHistories(state.contacts);
+            return;
+        }
         const beforeHash = snapshotHash({ contacts: state.contacts });
         state.contacts = mergeContacts(state.contacts, contacts);
         hydrateContactsFromConversations();
