@@ -8599,12 +8599,21 @@
     }
 
     async function dismissMemoryCandidate(candidateId) {
+        const agentId = currentMemoryServiceAgentId();
         try {
-            const resp = await fetch(`${API_BASE}/api/consciousness/memory-candidates/${encodeURIComponent(candidateId)}`, { method: 'DELETE' });
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const resp = await fetch(`${API_BASE}/api/consciousness/memory-candidates/${encodeURIComponent(candidateId)}?agent_id=${encodeURIComponent(agentId)}`, { method: 'DELETE' });
+            if (!resp.ok && resp.status !== 404) throw new Error(`HTTP ${resp.status}`);
             state.memoryCandidates = (state.memoryCandidates || []).filter(c => String(c.id) !== String(candidateId));
+            state.toast = resp.status === 404 ? '候选已处理，已从列表移除' : '已忽略候选';
             render();
-        } catch (e) { console.warn('[memory] dismiss failed', e); }
+            window.setTimeout(() => { state.toast = ''; render(); }, 1400);
+            await loadMemoryService(agentId, { silent: true });
+        } catch (e) {
+            console.warn('[memory] dismiss failed', e);
+            state.toast = '忽略失败，刷新后再试';
+            render();
+            window.setTimeout(() => { state.toast = ''; render(); }, 1400);
+        }
     }
     function promptMemoryDraft(existing = null) {
         const base = existing || {};
