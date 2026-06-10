@@ -370,9 +370,6 @@ function HomeBookshelf({ tomes, entries, onTome, onEntry, onCreateTome }) {
   const recentEntries = [...entries].slice(0, 3);
   return (
     <div style={{ width: "100%", height: "100%", background: C.paper, backgroundImage: "radial-gradient(ellipse 700px 400px at 30% 5%, rgba(255,238,220,0.4), transparent), repeating-linear-gradient(90deg, transparent 0 56px, rgba(160,120,85,0.025) 56px 57px)", overflow: "auto" }} className="phone-scroll">
-      <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 20px 0" }}>
-        <button type="button" onClick={onCreateTome} style={miniBtn}>＋ 新典</button>
-      </div>
       <GrimoireHead subtitle="书架" right={<button type="button" onClick={onCreateTome} style={miniBtn}>＋ 新典</button>} />
       <div style={{ margin: "0 20px 12px", padding: "8px 12px", background: C.paperDeep, borderRadius: 8, display: "flex", alignItems: "center", gap: 8, border: `0.5px solid ${C.rule}` }}>
         <span style={{ color: C.inkFaint, fontSize: 13 }}>⌕</span>
@@ -406,9 +403,6 @@ function HomeBookshelf({ tomes, entries, onTome, onEntry, onCreateTome }) {
 function HomeIndex({ tomes, onTome, onCreateTome }) {
   return (
     <div style={{ width: "100%", height: "100%", background: C.paper, backgroundImage: "repeating-linear-gradient(0deg, transparent 0 36px, rgba(160,120,85,0.04) 36px 37px)", overflow: "auto" }} className="phone-scroll">
-      <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 20px 0" }}>
-        <button type="button" onClick={onCreateTome} style={miniBtn}>＋ 新典</button>
-      </div>
       <GrimoireHead subtitle="索引" right={<button type="button" onClick={onCreateTome} style={miniBtn}>＋ 新典</button>} />
       <div style={{ margin: "0 20px 6px", padding: "8px 0", borderTop: `1px solid ${C.ink}`, borderBottom: `0.5px solid ${C.rule}`, display: "grid", gridTemplateColumns: "24px 1fr 60px 36px", gap: 8, alignItems: "center", fontFamily: F.serifCn, fontSize: 9, color: C.inkFaint, letterSpacing: "2px" }}>
         <span></span><span>典名</span><span style={{ textAlign: "right" }}>页数</span><span style={{ textAlign: "right" }}>最近</span>
@@ -443,9 +437,6 @@ function HomeSpreads({ tomes, entries, onTome, onEntry, onCreateTome }) {
   if (!featured) return <div style={{ padding: 20, color: C.inkFaint, fontFamily: F.serifCn, fontSize: 12 }}>还没有典。新建一个开始吧。</div>;
   return (
     <div style={{ width: "100%", height: "100%", background: C.paper, backgroundImage: "radial-gradient(ellipse 700px 500px at 50% 0%, rgba(255,238,220,0.5), transparent)", overflow: "auto" }} className="phone-scroll">
-      <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 20px 0" }}>
-        <button type="button" onClick={onCreateTome} style={miniBtn}>＋ 新典</button>
-      </div>
       <GrimoireHead subtitle="封面墙" right={<button type="button" onClick={onCreateTome} style={miniBtn}>＋ 新典</button>} />
       {/* featured banner */}
       <div style={{ padding: "4px 20px 18px" }}>
@@ -472,7 +463,7 @@ function HomeSpreads({ tomes, entries, onTome, onEntry, onCreateTome }) {
       </div>
       <div style={{ padding: "0 20px 30px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         {rest.map((tm) => <TomeCover key={tm.id} tome={tm} width={undefined} height={200} onClick={() => onTome(tm.id)} />)}
-        <div style={{ height: 200, borderRadius: 6, border: `0.5px dashed ${C.inkFaint}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, color: C.inkFaint, cursor: "pointer" }}>
+        <div onClick={onCreateTome} style={{ height: 200, borderRadius: 6, border: `0.5px dashed ${C.inkFaint}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, color: C.inkFaint, cursor: "pointer" }}>
           <span style={{ fontFamily: F.serifEn, fontStyle: "italic", fontSize: 32 }}>＋</span>
           <span style={{ fontFamily: F.serifCn, fontSize: 11, letterSpacing: "3px" }}>新一典</span>
         </div>
@@ -1114,7 +1105,7 @@ export default function GrimoireApp() {
     const payload = {
       id: `tome-${seed}`,
       title: "新典",
-      title_en: "new tome",
+      titleEn: "new tome",
       sub: "未命名目录",
       spine: "#7A3D2F",
       cover: "#8B4A38",
@@ -1140,14 +1131,14 @@ export default function GrimoireApp() {
     const seed = Date.now();
     const payload = {
       id: `entry-${seed}`,
-      tome_id: tomeId,
+      tome: tomeId,
       type: "lore",
       title: "新页",
-      title_en: "new page",
+      titleEn: "new page",
       sub: "",
       cover: "#8B4A38",
-      cover_ink: "#F1E4BD",
-      cover_glyph: "页",
+      coverInk: "#F1E4BD",
+      coverGlyph: "页",
       status: "draft",
       tags: [],
       fields: {},
@@ -1169,7 +1160,7 @@ export default function GrimoireApp() {
   const saveEntry = useCallback(async (entryId, draft) => {
     const payload = {
       title: draft.title,
-      title_en: draft.titleEn,
+      titleEn: draft.titleEn,
       sub: draft.sub,
       body: draft.body,
       fields: draft.fields,
