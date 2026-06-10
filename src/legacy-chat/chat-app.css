@@ -5696,6 +5696,11 @@ button.model-choice-item {
   background: transparent;
   border: 0;
   box-shadow: none;
+  filter: none;
+}
+
+.chat-shell .nav-tab-icon svg {
+  filter: none;
 }
 
 .chat-shell .send-round,
