@@ -1427,6 +1427,7 @@
         if (state.currentView === 'room') return renderRoomHeader();
         if (state.currentView === 'rpRoom') return renderRpRoomHeader();
         if (state.currentView === 'contactSettings') return renderSimpleHeader('\u8054\u7cfb\u4eba\u8bbe\u7f6e', 'back-room', true);
+        if (state.currentView === 'contactPersonaEditor') return renderSimpleHeader('\u89d2\u8272\u8bbe\u5b9a', 'back-contact-settings', true);
         if (state.currentView === 'cotLog') return renderSimpleHeader('COT \u65e5\u5fd7', 'back-contact-settings', true);
         if (state.currentView === 'rpLobby') {
             return `
@@ -1531,6 +1532,7 @@
         if (state.currentView === 'moments') return renderMoments();
         if (state.currentView === 'settings') return renderGlobalSettings();
         if (state.currentView === 'contactSettings') return renderContactSettingsV2();
+        if (state.currentView === 'contactPersonaEditor') return renderContactPersonaEditor();
         if (state.currentView === 'cotLog') return renderCotLogPage();
         if (state.currentView === 'companionStateDetail') return renderCompanionStateDetail();
         if (state.currentView === 'contactImpressionDetail') return renderContactInsightDetail('\u5173\u4e8e\u4f60\u7684\u5370\u8c61', 'impression', state.companionState.impression);
@@ -2801,6 +2803,19 @@
     function renderContactSettings() {
         return renderContactSettingsV2();
     }
+
+    function renderContactPersonaEditor() {
+        const c = byId(state.currentContactId) || state.contacts[0];
+        if (!c) return '';
+        return `
+      <section class="contact-persona-editor-page page-block">
+        <div class="settings-group glass-frost ai-panel contact-persona-editor-card">
+          <textarea class="ai-textarea persona-textarea contact-persona-textarea contact-persona-fullscreen" data-contact-field="persona" placeholder="\u5728\u8fd9\u91cc\u8f93\u5165 AI \u7684\u4eba\u8bbe\u3001\u89d2\u8272\u8bf4\u660e\u3001\u884c\u4e3a\u6307\u4ee4\u3002">${escapeHtml(c.persona || '')}</textarea>
+        </div>
+      </section>
+    `;
+    }
+
     function renderContactSettingsV2() {
         const c = byId(state.currentContactId) || state.contacts[0];
         const s = c.settings;
@@ -2854,13 +2869,9 @@
           </div>
           <div class="settings-group glass-frost ai-panel">
             <h3>\u89d2\u8272\u8bbe\u5b9a</h3>
-            <button class="setting-row nav-row persona-collapse-toggle" data-action="toggle-contact-persona" aria-expanded="${state.contactPersonaExpanded ? 'true' : 'false'}">
-              <div class="setting-copy">
-                <strong>${state.contactPersonaExpanded ? '\u6536\u8d77\u89d2\u8272\u8bbe\u5b9a' : '\u5c55\u5f00\u89d2\u8272\u8bbe\u5b9a'}</strong>
-              </div>
-              <span class="row-chevron advanced-chevron ${state.contactPersonaExpanded ? 'open' : ''}">${icon('chevron')}</span>
+            <button type="button" class="contact-persona-preview" data-action="open-contact-persona-editor" aria-label="\u7f16\u8f91\u89d2\u8272\u8bbe\u5b9a">
+              <span>${escapeHtml(c.persona || '\u8fd8\u6ca1\u6709\u89d2\u8272\u8bbe\u5b9a')}</span>
             </button>
-            ${state.contactPersonaExpanded ? `<textarea class="ai-textarea persona-textarea contact-persona-textarea expanded" data-contact-field="persona" rows="10" placeholder="\u5728\u8fd9\u91cc\u8f93\u5165 AI \u7684\u4eba\u8bbe\u3001\u89d2\u8272\u8bf4\u660e\u3001\u884c\u4e3a\u6307\u4ee4\u3002">${escapeHtml(c.persona || '')}</textarea>` : ''}
             ${switchRow('显示推理内容', '仅在模型返回推理内容时显示', s.reasoning_visibility || false, 'toggle-contact', 'reasoning_visibility')}
           </div>
           <div class="settings-group glass-frost ai-panel">
@@ -4271,6 +4282,14 @@
             state.activityLogEntries = [];
             render();
             loadActivityLog({ silent: true });
+            return;
+        }
+
+        if (action === 'open-contact-persona-editor') {
+            state._prevContactSettingsTab = 'model';
+            state.currentSettingsTab = 'model';
+            state.currentView = 'contactPersonaEditor';
+            render();
             return;
         }
 
