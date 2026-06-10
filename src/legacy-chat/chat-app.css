@@ -1461,6 +1461,25 @@
     position: relative;
 }
 
+.chat-input b,
+.chat-input strong {
+    font-weight: 800;
+}
+
+.chat-input i,
+.chat-input em {
+    font-style: italic;
+}
+
+.chat-input u {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.chat-input s {
+    text-decoration: line-through;
+}
+
 .chat-input[contenteditable="true"][data-empty="true"]::before {
     content: attr(data-placeholder);
     color: rgba(156, 131, 140, 0.72);

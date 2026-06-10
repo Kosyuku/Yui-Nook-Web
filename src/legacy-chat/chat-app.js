@@ -2107,7 +2107,7 @@
         const c = byId(state.currentContactId) || state.contacts[0];
         const quoteMoment = state.quoteMomentId ? getMoment(state.quoteMomentId) : null;
         const quoteMessage = state.quoteMessageId ? c.messages.find((item) => item.id === state.quoteMessageId) : null;
-        const messages = visibleChatMessages(conversationMessagesForContact(c));
+        const messages = compactVisibleEventMessages(visibleChatMessages(conversationMessagesForContact(c)));
         const attachments = (state.chatAttachments || []).map(serializeChatAttachment).filter(Boolean);
         return `
       <section class="room-page room-theme-${c.theme}">
@@ -2135,6 +2135,53 @@
 
     function visibleChatMessages(messages = []) {
         return mergeMessageLists([], messages).map(contactMessageFromStored).filter(isRenderableMessage);
+    }
+
+    const SAME_EVENT_VISIBLE_LIMIT = 3;
+
+    function eventDisplayKey(message = {}) {
+        return message.role === 'event' ? messageTextValue(message).replace(/\s+/g, ' ').trim() : '';
+    }
+
+    function compactVisibleEventMessages(messages = []) {
+        const out = [];
+        let currentKey = '';
+        let visibleCount = 0;
+        let hiddenCount = 0;
+        let hiddenAnchor = null;
+        const flushHidden = () => {
+            if (!hiddenCount || !hiddenAnchor) return;
+            out.push(contactMessageFromStored({
+                ...hiddenAnchor,
+                id: `${hiddenAnchor.id || currentKey}__event_more_${hiddenCount}`,
+                role: 'event',
+                content: `同类活动还有 ${hiddenCount} 条`,
+                text: `同类活动还有 ${hiddenCount} 条`,
+            }));
+            hiddenCount = 0;
+            hiddenAnchor = null;
+        };
+        messages.forEach((message) => {
+            const key = eventDisplayKey(message);
+            if (!key || key !== currentKey) {
+                flushHidden();
+                currentKey = key;
+                visibleCount = key ? 0 : 0;
+            }
+            if (!key) {
+                out.push(message);
+                return;
+            }
+            visibleCount += 1;
+            if (visibleCount <= SAME_EVENT_VISIBLE_LIMIT) {
+                out.push(message);
+            } else {
+                hiddenCount += 1;
+                hiddenAnchor = message;
+            }
+        });
+        flushHidden();
+        return out;
     }
 
     function messageRenderMeta(messages = [], index = 0) {
@@ -3739,6 +3786,68 @@
         input.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
+    function sanitizeChatInputHtml(html) {
+        if (!html) return '';
+        const allowedTags = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'S', 'BR', 'DIV', 'P', 'SPAN']);
+        const template = document.createElement('template');
+        template.innerHTML = String(html);
+        const cleanNode = (node) => {
+            if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent || '');
+            if (node.nodeType !== Node.ELEMENT_NODE) return document.createTextNode('');
+            const tag = node.tagName;
+            if (tag === 'IMG') return document.createTextNode(node.alt || '');
+            const children = Array.from(node.childNodes).map(cleanNode);
+            if (tag === 'BR') return document.createElement('br');
+            if (!allowedTags.has(tag)) {
+                const fragment = document.createDocumentFragment();
+                children.forEach((child) => fragment.appendChild(child));
+                return fragment;
+            }
+            const outTag = tag === 'STRONG' ? 'b' : tag === 'EM' ? 'i' : tag.toLowerCase();
+            const out = document.createElement(outTag);
+            children.forEach((child) => out.appendChild(child));
+            return out;
+        };
+        const fragment = document.createDocumentFragment();
+        Array.from(template.content.childNodes).forEach((node) => fragment.appendChild(cleanNode(node)));
+        const box = document.createElement('div');
+        box.appendChild(fragment);
+        return box.innerHTML;
+    }
+
+    function insertHtmlIntoInput(input, html, fallbackText = '') {
+        if (!input) return;
+        const cleanHtml = sanitizeChatInputHtml(html);
+        if (!input.isContentEditable || !cleanHtml) {
+            insertPlainTextIntoInput(input, fallbackText || plainTextFromHtml(html));
+            return;
+        }
+        input.focus();
+        if (!selectionBelongsToInput(input)) placeCaretAtEnd(input);
+        const selection = window.getSelection?.();
+        if (!selection?.rangeCount) {
+            input.insertAdjacentHTML('beforeend', cleanHtml);
+            updateChatInputEmptyState(input);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            return;
+        }
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        const template = document.createElement('template');
+        template.innerHTML = cleanHtml;
+        const fragment = template.content;
+        const lastNode = fragment.lastChild;
+        range.insertNode(fragment);
+        if (lastNode) {
+            range.setStartAfter(lastNode);
+            range.setEndAfter(lastNode);
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
+        updateChatInputEmptyState(input);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
     function plainTextFromHtml(html) {
         if (!html) return '';
         const temp = document.createElement('div');
@@ -3746,30 +3855,49 @@
         return (temp.textContent || temp.innerText || '').replace(/\n{3,}/g, '\n\n');
     }
 
-    async function handleChatInputPaste(event) {
-        if (state.currentView !== 'room') return;
-        const clipboard = event.clipboardData;
-        if (!clipboard) return;
+    function getActiveChatInput(target = null) {
+        const direct = target?.closest?.('.chat-input');
+        if (direct) return direct;
+        return root()?.querySelector('.chat-input') || null;
+    }
+
+    function clipboardImageFiles(clipboard) {
+        if (!clipboard) return [];
         const directFiles = Array.from(clipboard.files || []).filter(isChatImageFile);
         const itemFiles = Array.from(clipboard.items || [])
             .filter((item) => item.kind === 'file' && /^image\//i.test(item.type || ''))
             .map((item) => item.getAsFile())
             .filter(isChatImageFile);
-        const imageFiles = [...directFiles, ...itemFiles].filter((file, index, all) => (
+        return [...directFiles, ...itemFiles].filter((file, index, all) => (
             index === all.findIndex((item) => item.name === file.name && item.size === file.size && item.type === file.type)
         ));
+    }
+
+    async function handleChatInputPaste(event, inputOverride = null) {
+        if (!['room', 'rpRoom'].includes(state.currentView)) return false;
+        const clipboard = event.clipboardData;
+        if (!clipboard) return false;
+        const input = inputOverride || event.currentTarget || getActiveChatInput(event.target);
+        if (!input) return false;
+        const imageFiles = clipboardImageFiles(clipboard);
         const plain = clipboard.getData('text/plain') || '';
         const html = clipboard.getData('text/html') || '';
         if (imageFiles.length) {
             event.preventDefault();
+            event.stopPropagation?.();
             await addChatImageFiles(imageFiles);
-            if (plain.trim()) insertPlainTextIntoInput(event.currentTarget, plain);
-            return;
+            const nextInput = getActiveChatInput(input) || input;
+            if (html.trim()) insertHtmlIntoInput(nextInput, html, plain);
+            else if (plain.trim()) insertPlainTextIntoInput(nextInput, plain);
+            return true;
         }
         if (html) {
             event.preventDefault();
-            insertPlainTextIntoInput(event.currentTarget, plain || plainTextFromHtml(html));
+            event.stopPropagation?.();
+            insertHtmlIntoInput(input, html, plain || plainTextFromHtml(html));
+            return true;
         }
+        return false;
     }
 
     function openAvatarCropper(kind, src) {
@@ -10073,6 +10201,15 @@
 
     document.addEventListener('paste', (event) => {
         const target = event.target;
+        if (target?.id !== 'provider-key-input') {
+            const input = getActiveChatInput(target);
+            const hasImage = clipboardImageFiles(event.clipboardData).length > 0;
+            const hasHtml = !!event.clipboardData?.getData('text/html');
+            if (input && (target?.closest?.('.chat-input') || hasImage || hasHtml)) {
+                handleChatInputPaste(event, input);
+                return;
+            }
+        }
         if (target?.id !== 'provider-key-input') return;
         event.preventDefault();
         const text = String(event.clipboardData?.getData('text/plain') || '').trim();
