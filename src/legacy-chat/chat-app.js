@@ -7135,6 +7135,7 @@
         let fullThinking = '';
         let fullToolCalls = null;
         let _textFirstRendered = false;
+        const deferAssistantTextUntilChunked = true;
 
         try {
             const resp = await requestChatStream(c, body, _abortCtrl.signal);
@@ -7185,7 +7186,7 @@
                         const idx = aiIdx();
                         if (idx !== -1) {
                             c.messages[idx] = {
-                                id: aiId, role: 'ai', text: fullText,
+                                id: aiId, role: 'ai', text: deferAssistantTextUntilChunked ? '' : fullText,
                                 thinking: fullThinking, time: nowTimeStr(),
                                 typing: false, streaming: true, transient: true,
                             };
@@ -7221,31 +7222,51 @@
                         const inlineSplit = splitInlineReasoningReply(fullText);
                         const visibleText = inlineSplit.visible;
                         const visibleThinking = joinThinkingParts(fullThinking, inlineSplit.thinking);
-                        const idx3 = aiIdx();
-                        if (idx3 !== -1) {
-                            c.messages[idx3] = {
-                                ...c.messages[idx3],
-                                text: visibleText,
-                                content: visibleText,
-                                ...(visibleThinking ? { thinking: visibleThinking } : {}),
-                                time: nowTimeStr(),
-                                typing: false,
-                                streaming: true,
-                                transient: true,
-                            };
-                            if (!visibleText) {
-                                if (visibleThinking) {
-                                    _thinkingFirstRendered = true;
-                                    state.openThinkingIds[aiId] = true;
-                                    render();
-                                    scrollToBottom();
-                                }
-                            } else if (!_textFirstRendered) {
-                                _textFirstRendered = true;
+                        if (deferAssistantTextUntilChunked) {
+                            const idx3 = aiIdx();
+                            if (idx3 !== -1 && visibleThinking) {
+                                c.messages[idx3] = {
+                                    ...c.messages[idx3],
+                                    text: '',
+                                    content: '',
+                                    thinking: visibleThinking,
+                                    time: nowTimeStr(),
+                                    typing: false,
+                                    streaming: true,
+                                    transient: true,
+                                };
+                                _thinkingFirstRendered = true;
+                                state.openThinkingIds[aiId] = true;
                                 render();
                                 scrollToBottom();
-                            } else {
-                                patchStreamingMessageDom(aiId, visibleText, visibleThinking);
+                            }
+                        } else {
+                            const idx3 = aiIdx();
+                            if (idx3 !== -1) {
+                                c.messages[idx3] = {
+                                    ...c.messages[idx3],
+                                    text: visibleText,
+                                    content: visibleText,
+                                    ...(visibleThinking ? { thinking: visibleThinking } : {}),
+                                    time: nowTimeStr(),
+                                    typing: false,
+                                    streaming: true,
+                                    transient: true,
+                                };
+                                if (!visibleText) {
+                                    if (visibleThinking) {
+                                        _thinkingFirstRendered = true;
+                                        state.openThinkingIds[aiId] = true;
+                                        render();
+                                        scrollToBottom();
+                                    }
+                                } else if (!_textFirstRendered) {
+                                    _textFirstRendered = true;
+                                    render();
+                                    scrollToBottom();
+                                } else {
+                                    patchStreamingMessageDom(aiId, visibleText, visibleThinking);
+                                }
                             }
                         }
                     }
