@@ -6043,14 +6043,7 @@ button.model-choice-item {
 }
 
 .contact-settings-page .contact-persona-textarea.collapsed {
-  display: block;
-  box-sizing: border-box;
-  width: 100%;
-  height: 96px !important;
-  min-height: 96px !important;
-  max-height: 96px !important;
-  overflow-y: auto;
-  resize: none;
+  display: none;
 }
 
 .contact-settings-page .contact-persona-textarea.expanded {
