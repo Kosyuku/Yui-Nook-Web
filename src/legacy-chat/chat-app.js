@@ -2194,19 +2194,19 @@
         const attachments = messageAttachments(message);
         const attachmentBlock = renderMessageAttachments(attachments);
         const showInlineTime = meta.showTime && message.time && !message.typing;
-        const inlineTimeClass = attachments.length || text.length > 18 || text.includes('\n') ? 'block-time' : 'tail-time';
-        const inlineTime = showInlineTime ? `<time class="bubble-time ${inlineTimeClass}">${escapeHtml(message.time)}</time>` : '';
+        const inlineTime = showInlineTime ? `<time class="bubble-time">${escapeHtml(message.time)}</time>` : '';
+        const timedBubbleClass = showInlineTime ? ' has-time' : '';
         const showSourceMeta = message.role === 'ai' && sourceBadge;
         const bubbleWrap = `
           <div class="message-bubble-wrap">
             ${showSourceMeta ? `<div class="bubble-meta-row">
               ${sourceBadge}
             </div>` : ''}
-            <div class="message-bubble ${roleClass}${bubbleClassExtra}" data-msg-id="${message.id}" data-action="toggle-message-tools" data-id="${message.id}">
+            <div class="message-bubble ${roleClass}${bubbleClassExtra}${timedBubbleClass}" data-msg-id="${message.id}" data-action="toggle-message-tools" data-id="${message.id}">
               ${cotButton}
               ${(message.typing || (message.streaming && !message.text))
                   ? `<div class="typing-dots"><span></span><span></span><span></span></div>`
-                  : `${attachmentBlock}${text ? `<div class="message-text">${escapeHtml(text)}${inlineTimeClass === 'tail-time' ? inlineTime : ''}</div>` : ''}${inlineTimeClass === 'block-time' ? inlineTime : ''}`}
+                  : `${attachmentBlock}${text ? `<div class="message-text">${escapeHtml(text)}</div>` : ''}${inlineTime}`}
             </div>
             ${bottomTools}
           </div>`;
