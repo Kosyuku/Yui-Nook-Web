@@ -5615,6 +5615,45 @@
         return keys;
     }
 
+    function compactAssistantText(text = '') {
+        return normalizeBubbleText(text)
+            .replace(/\s+/g, '')
+            .replace(/[，。！？、；：,.!?;:()[\]（）［］【】《》"'“”‘’`*_~\-—]/g, '');
+    }
+
+    function removeAssistantChunkDuplicates(messages = []) {
+        const sorted = messages.filter(Boolean).sort((a, b) => {
+            const at = comparableTime(a.created_at);
+            const bt = comparableTime(b.created_at);
+            if (at || bt) return at - bt;
+            return String(a.id).localeCompare(String(b.id));
+        });
+        const remove = new Set();
+        for (let i = 0; i < sorted.length; i += 1) {
+            const full = normalizeStoredMessage(sorted[i]);
+            if (full.role !== 'ai') continue;
+            const fullText = compactAssistantText(messageTextValue(full));
+            if (!fullText) continue;
+            const parts = [];
+            for (let j = i + 1; j < sorted.length; j += 1) {
+                const item = normalizeStoredMessage(sorted[j]);
+                if (item.role === 'user') break;
+                if (item.role !== 'ai') continue;
+                const text = compactAssistantText(messageTextValue(item));
+                if (!text) continue;
+                parts.push({ index: j, text });
+                const joined = parts.map((part) => part.text).join('');
+                if (joined === fullText || (parts.length >= 2 && fullText.includes(joined) && joined.length >= Math.max(24, Math.floor(fullText.length * 0.65)))) {
+                    parts.forEach((part) => remove.add(part.index));
+                    break;
+                }
+                if (!fullText.startsWith(joined) && !fullText.includes(joined)) break;
+                if (joined.length > fullText.length + 8) break;
+            }
+        }
+        return sorted.filter((_item, index) => !remove.has(index));
+    }
+
     function upsertMessage(list = [], message = {}) {
         const normalized = contactMessageFromStored(message);
         const keys = messageMergeKeys(normalized);
@@ -5702,7 +5741,7 @@
                 [...messageMergeKeys(next)].forEach((key) => keyToIndex.set(key, index));
             }
         });
-        return merged.filter(Boolean).sort((a, b) => {
+        return removeAssistantChunkDuplicates(merged).sort((a, b) => {
             const at = comparableTime(a.created_at);
             const bt = comparableTime(b.created_at);
             if (at || bt) return at - bt;
