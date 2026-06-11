@@ -9641,9 +9641,11 @@
         const syncStatus = state.providerModelSyncStatus?.[provider.id];
         const savedKeyMask = maskedApiKey(provider.apiKey || '');
         const keyIsDirty = !!provider._apiKeyDirty;
-        const keyInputValue = keyIsDirty ? String(provider.apiKey || '') : savedKeyMask;
-        const keyInputType = keyIsDirty ? (state.providerKeyVisible ? 'text' : 'password') : 'text';
-        const keyButtonText = keyIsDirty ? (state.providerKeyVisible ? '隐藏' : '显示') : (savedKeyMask ? '更换' : '显示');
+        const keyInputValue = keyIsDirty
+            ? String(provider.apiKey || '')
+            : (state.providerKeyVisible && provider.apiKey ? String(provider.apiKey || '') : savedKeyMask);
+        const keyInputType = state.providerKeyVisible ? 'text' : (keyIsDirty ? 'password' : 'text');
+        const keyButtonText = state.providerKeyVisible ? '隐藏' : '显示';
         return `
       <section class="settings-page page-block ai-settings-page provider-editor-page">
         <div class="settings-group glass-frost ai-panel provider-editor-card">
@@ -9985,7 +9987,9 @@
         if (action === 'sync-provider-models') { syncProviderModelsFromEditor(); return; }
         if (action === 'toggle-provider-key-visible') {
             const draft = ensureProviderEditorDraft();
-            if (!draft._apiKeyDirty) {
+            if (draft.apiKey && !draft._apiKeyDirty) {
+                state.providerKeyVisible = !state.providerKeyVisible;
+            } else if (!draft._apiKeyDirty) {
                 draft._apiKeyDirty = true;
                 draft.apiKey = '';
                 state.providerKeyVisible = true;
@@ -10555,6 +10559,18 @@
         }
     });
 
+    document.addEventListener('beforeinput', (event) => {
+        const target = event.target;
+        if (target?.id !== 'provider-key-input' || target.dataset?.masked !== 'true') return;
+        const draft = ensureProviderEditorDraft();
+        target.value = '';
+        target.dataset.masked = 'false';
+        target.type = 'text';
+        draft._apiKeyDirty = true;
+        draft.apiKey = '';
+        state.providerKeyVisible = true;
+    });
+
     document.addEventListener('paste', (event) => {
         const target = event.target;
         if (target?.id !== 'provider-key-input') {
@@ -11027,12 +11043,11 @@
         }
         if (target?.id === 'provider-key-input' && target.dataset?.masked === 'true') {
             const draft = ensureProviderEditorDraft();
-            target.value = '';
+            target.focus?.();
             target.dataset.masked = 'false';
-            draft._apiKeyDirty = true;
-            draft.apiKey = '';
             state.providerKeyVisible = true;
             target.type = 'text';
+            target.value = draft.apiKey || '';
         }
     });
 
