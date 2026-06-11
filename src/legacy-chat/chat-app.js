@@ -2338,6 +2338,14 @@
         return { showTime };
     }
 
+    function userBubbleSizeClass(text = '') {
+        const chars = Array.from(String(text || '').replace(/\s+/g, '')).length;
+        if (chars <= 2) return ' user-bubble-xs';
+        if (chars <= 5) return ' user-bubble-sm';
+        if (chars <= 10) return ' user-bubble-md';
+        return '';
+    }
+
     function renderMessage(message, contact, meta = {}) {
         if (!isRenderableMessage(message)) return '';
         if (message.role === 'event') {
@@ -2382,6 +2390,7 @@
             ? renderToolLines(message.toolCalls)
             : '';
         const text = normalizeBubbleText(messageTextValue(message));
+        const sizeClass = message.role === 'user' ? userBubbleSizeClass(text) : '';
         const attachments = messageAttachments(message);
         const attachmentBlock = renderMessageAttachments(attachments);
         const showInlineTime = meta.showTime && message.time && !message.typing;
@@ -2389,7 +2398,7 @@
         const timedBubbleClass = showInlineTime ? ' has-time' : '';
         const showSourceMeta = message.role === 'ai' && sourceBadge;
         const bubbleWrap = `
-          <div class="message-bubble-wrap">
+          <div class="message-bubble-wrap${sizeClass}">
             ${showSourceMeta ? `<div class="bubble-meta-row">
               ${sourceBadge}
             </div>` : ''}
