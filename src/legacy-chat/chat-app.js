@@ -4016,6 +4016,29 @@
         selection?.addRange(range);
     }
 
+    function clickIsAfterChatInputText(input, event) {
+        if (!input?.isContentEditable) return false;
+        const text = getChatInputText(input);
+        if (!text.trim()) return true;
+        const range = document.createRange();
+        range.selectNodeContents(input);
+        const rects = Array.from(range.getClientRects());
+        range.detach?.();
+        if (!rects.length) return true;
+        const y = Number(event?.clientY || 0);
+        const sameLine = rects.filter((rect) => y >= rect.top - 4 && y <= rect.bottom + 4);
+        const rect = sameLine[sameLine.length - 1] || rects[rects.length - 1];
+        return Number(event?.clientX || 0) > rect.right + 4;
+    }
+
+    function focusChatInputFromComposerClick(input, event) {
+        if (!input?.classList?.contains('chat-input')) return;
+        input.focus({ preventScroll: true });
+        if (clickIsAfterChatInputText(input, event)) {
+            placeCaretAtEnd(input);
+        }
+    }
+
     function insertPlainTextIntoInput(input, text) {
         if (!input || !text) return;
         const nextText = String(text);
@@ -4405,12 +4428,12 @@
             if (inputWrap && inputWrap.dataset.focusBound !== '1') {
                 inputWrap.dataset.focusBound = '1';
                 inputWrap.addEventListener('pointerdown', (event) => {
-                    if (event.target === chatInput || event.target.closest('[data-action]')) return;
+                    if (event.target.closest('[data-action]')) return;
                     chatInput.focus({ preventScroll: true });
                 });
                 inputWrap.addEventListener('click', (event) => {
-                    if (event.target === chatInput || event.target.closest('[data-action]')) return;
-                    placeCaretAtEnd(chatInput);
+                    if (event.target.closest('[data-action]')) return;
+                    focusChatInputFromComposerClick(chatInput, event);
                 });
             }
             restoreChatInputState(chatInput);

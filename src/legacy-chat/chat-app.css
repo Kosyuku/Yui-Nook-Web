@@ -1487,6 +1487,7 @@
     overflow: hidden;
     border: 1px solid rgba(232, 219, 225, 0.96);
     box-shadow: 0 3px 10px rgba(181,146,159,.06);
+    cursor: text;
 }
 
 .composer-card .soft-mini {
