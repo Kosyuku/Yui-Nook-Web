@@ -636,6 +636,20 @@
             .join('\n\n');
     }
 
+    function renderMessageTextHtml(text = '') {
+        const raw = String(text || '');
+        const urlPattern = /https?:\/\/[^\s<>"']+/g;
+        let html = '';
+        let lastIndex = 0;
+        for (const match of raw.matchAll(urlPattern)) {
+            html += escapeHtml(raw.slice(lastIndex, match.index));
+            html += `<span class="message-url">${escapeHtml(match[0])}</span>`;
+            lastIndex = match.index + match[0].length;
+        }
+        html += escapeHtml(raw.slice(lastIndex));
+        return html;
+    }
+
     function assistantChunkDelay(text) {
         const len = String(text || '').trim().length;
         if (len <= 10) return 300 + Math.floor(Math.random() * 201);
@@ -2261,7 +2275,7 @@
               ${cotButton}
               ${(message.typing || (message.streaming && !message.text))
                   ? `<div class="typing-dots"><span></span><span></span><span></span></div>`
-                  : `${attachmentBlock}${text ? `<div class="message-text">${escapeHtml(text)}</div>` : ''}${inlineTime}`}
+                  : `${attachmentBlock}${text ? `<div class="message-text">${renderMessageTextHtml(text)}</div>` : ''}${inlineTime}`}
             </div>
             ${bottomTools}
           </div>`;

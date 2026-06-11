@@ -655,12 +655,18 @@
   flex-direction: column;
   align-items: flex-start;
   overflow: visible;
-  max-width: 80%;
+  width: max-content;
+  max-width: 76%;
   min-width: 0;
 }
 
 .message-row.from-ai .message-bubble-wrap {
-  max-width: 80%;
+  max-width: 82%;
+}
+
+.message-row.from-user .message-bubble-wrap {
+  align-items: flex-end;
+  max-width: 76%;
 }
 
 .bubble-meta-row {
@@ -671,15 +677,16 @@
 }
 
 .bubble-time {
-  position: absolute;
-  right: 9px;
-  bottom: 5px;
+  display: block;
+  position: static;
+  margin-top: 4px;
   font-size: 8.5px;
   color: rgba(128, 110, 119, 0.58);
   white-space: nowrap;
   font-weight: 650;
   letter-spacing: 0;
   line-height: 1;
+  text-align: right;
   user-select: none;
 }
 
@@ -695,7 +702,7 @@
   position: relative;
   max-width: 100%;
   min-width: 0;
-  width: fit-content;
+  width: 100%;
   padding: 9px 12px 8px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.94);
@@ -708,13 +715,15 @@
 }
 
 .message-bubble.has-time {
-  padding-right: 48px;
-  padding-bottom: 17px;
+  padding-right: 12px;
+  padding-bottom: 8px;
 }
 
 .message-text {
   display: block;
-  overflow-wrap: anywhere;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 /* Send button → stop mode during streaming */
@@ -805,8 +814,8 @@
   max-width: 100%;
   min-width: 0;
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .message-text > *,
@@ -816,8 +825,8 @@
 .message-text blockquote {
   max-width: 100%;
   min-width: 0;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .message-text pre {
@@ -829,8 +838,15 @@
 }
 
 .message-text code {
-  overflow-wrap: normal;
+  overflow-wrap: anywhere;
   word-break: normal;
+}
+
+.message-text a,
+.message-text .message-url,
+.message-text pre,
+.message-text code {
+  overflow-wrap: anywhere;
 }
 
 .cot-wrapper {
@@ -3050,7 +3066,8 @@
 @media (max-width: 380px) {
   .chat-app-body { padding-inline: 12px; }
   .room-layout { padding-inline: 8px; }
-  .message-bubble-wrap { max-width: 80%; }
+  .message-row.from-ai .message-bubble-wrap { max-width: 82%; }
+  .message-row.from-user .message-bubble-wrap { max-width: 76%; }
 }
 
 
