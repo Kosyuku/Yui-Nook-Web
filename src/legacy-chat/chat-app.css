@@ -649,6 +649,14 @@
   height: 12px;
 }
 
+.bubble-mini-btn.is-loading svg {
+  animation: voice-spin 900ms linear infinite;
+}
+
+@keyframes voice-spin {
+  to { transform: rotate(360deg); }
+}
+
 .message-bubble-wrap {
   position: relative;
   display: flex;
@@ -1025,6 +1033,37 @@
 }
 
 /* ── Message bubble fade-in ───────────────── */
+.voice-bar,
+.voice-bar-status {
+  margin: 5px 0 0 0;
+  max-width: min(260px, 82vw);
+  align-self: flex-start;
+}
+
+.voice-bar {
+  width: min(260px, 82vw);
+  height: 30px;
+  display: block;
+  opacity: 0.92;
+}
+
+.voice-bar-status {
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(226, 211, 220, 0.66);
+  color: rgba(116, 94, 106, 0.72);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.voice-bar-error {
+  color: rgba(184, 82, 104, 0.86);
+  background: rgba(255, 239, 243, 0.78);
+  border-color: rgba(236, 190, 202, 0.78);
+}
+
 @keyframes msg-fadein {
   from {
     opacity: 0;

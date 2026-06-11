@@ -1148,6 +1148,7 @@
             quote: `<svg ${common}><path d="M9 7H5v5h4v5H4v-5c0-2.8 1.8-5 5-5zM20 7h-4v5h4v5h-5v-5c0-2.8 1.8-5 5-5z"/></svg>`,
             copy: `<svg ${common}><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 012-2h10"/></svg>`,
             reroll: `<svg ${common}><path d="M20 11a8 8 0 10-2.3 5.7"/><path d="M20 4v7h-7"/></svg>`,
+            speaker: `<svg ${common}><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>`,
             cot: `<svg ${common}><path d="M12 4v16M4 12h16"/><path d="M7.5 7.5l9 9M16.5 7.5l-9 9" opacity="0.18"/></svg>`,
             bubbleHeart: `<svg ${common}><path d="M12 19.3s-5.8-3.5-5.8-8a3.7 3.7 0 016.1-2.8 3.7 3.7 0 015.9 2.8c0 4.5-5.6 8-5.6 8z"/></svg>`,
             weather: `<svg ${common}><path d="M6 16a4 4 0 010-8 5.5 5.5 0 0110.4-1.8A4 4 0 1118 16H6z"/></svg>`,
@@ -2375,6 +2376,7 @@
             ? `
         <div class="bubble-bottom-tools ${state.activeBubbleToolsId === message.id ? 'open' : ''}">
           ${message.role === 'ai' ? `<button class="bubble-mini-btn" data-action="reroll-msg" data-id="${message.id}" aria-label="\u91cd\u8bd5">${icon('reroll')}</button>` : ''}
+          ${message.role === 'ai' ? `<button class="bubble-mini-btn${message.voiceLoading ? ' is-loading' : ''}" data-action="speak-msg" data-id="${message.id}" aria-label="\u6717\u8bfb">${icon('speaker')}</button>` : ''}
           <button class="bubble-mini-btn" data-action="quote-msg" data-id="${message.id}" aria-label="\u5f15\u7528">${icon('quote')}</button>
           <button class="bubble-mini-btn" data-action="copy-msg" data-id="${message.id}" aria-label="\u590d\u5236">${icon('copy')}</button>
           <button class="bubble-mini-btn" data-action="delete-msg" data-id="${message.id}" aria-label="\u5220\u9664">${icon('trash')}</button>
@@ -2413,14 +2415,29 @@
         const colInner = message.role === 'ai' && (thinkingBlock || toolLinesBlock)
             ? `${thinkingBlock}${toolLinesBlock}${bubbleWrap}`
             : `${bubbleWrap}${thinkingBlock}${toolLinesBlock}`;
+        const voiceBar = message.role === 'ai' ? renderVoiceBar(message) : '';
         return `
       <div class="message-row ${roleClass}" data-msg-id="${message.id}">
         ${avatar}
         <div class="message-bubble-col">
           ${colInner}
+          ${voiceBar}
         </div>
       </div>
     `;
+    }
+
+    function renderVoiceBar(message) {
+        if (message.voiceLoading) {
+            return `<div class="voice-bar-status" data-voice-id="${message.id}">语音合成中…</div>`;
+        }
+        if (message.voiceError) {
+            return `<div class="voice-bar-status voice-bar-error" data-voice-id="${message.id}">语音失败：${escapeHtml(message.voiceError)}</div>`;
+        }
+        if (message.voiceUrl) {
+            return `<audio class="voice-bar" data-voice-id="${message.id}" controls preload="auto" src="${escapeHtml(message.voiceUrl)}"></audio>`;
+        }
+        return '';
     }
 
     function renderQuoteBar(moment) {
@@ -5440,6 +5457,10 @@
             deleteChatMessage(target.dataset.id);
         }
 
+        if (action === 'speak-msg') {
+            speakChatMessage(target.dataset.id);
+        }
+
         if (action === 'attach-option') {
             state.showAttach = false;
             const label = target.dataset.label || '';
@@ -5888,6 +5909,56 @@
             state.toast = '';
             render();
         }, 1200);
+    }
+
+    async function speakChatMessage(messageId = '') {
+        const rawId = String(messageId || '').trim();
+        if (!rawId) return;
+        const contact = byId(state.currentContactId);
+        if (!contact) return;
+        const msg = (contact.messages || []).find((item) => item.id === rawId);
+        if (!msg) return;
+        const text = String(msg.text || msg.content || '').trim();
+        if (!text) {
+            state.toast = '这条没有可朗读的文字';
+            render();
+            window.setTimeout(() => { state.toast = ''; render(); }, 1200);
+            return;
+        }
+        // 已合成过：直接重播，不再调接口（省 TTS 额度）
+        if (msg.voiceUrl) {
+            const el = root()?.querySelector(`audio.voice-bar[data-voice-id="${rawId}"]`);
+            if (el) { try { el.currentTime = 0; } catch (_) {} el.play().catch(() => {}); }
+            return;
+        }
+        if (msg.voiceLoading) return;
+        msg.voiceLoading = true;
+        msg.voiceError = '';
+        render();
+        try {
+            const resp = await fetch(`${API_BASE}/api/voice/speak`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, agentId: contact.id }),
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data.audioUrl) {
+                throw new Error(data.detail || data.error || `HTTP ${resp.status}`);
+            }
+            msg.voiceUrl = data.audioUrl;
+            msg.voiceLoading = false;
+            render();
+            // 合成成功后自动播一次（点击是用户手势，多数浏览器允许）
+            requestAnimationFrame(() => {
+                const el = root()?.querySelector(`audio.voice-bar[data-voice-id="${rawId}"]`);
+                if (el) el.play().catch(() => {});
+            });
+        } catch (error) {
+            msg.voiceLoading = false;
+            msg.voiceError = String(error?.message || error || '请求失败');
+            console.warn('[voice] speak failed', error);
+            render();
+        }
     }
 
     async function copyChatMessage(messageId = '') {
