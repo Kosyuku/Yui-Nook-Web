@@ -245,6 +245,9 @@
         contactPersonaExpanded: false,
         contactModelAdvancedOpen: false,
         chatInputDraft: '',
+        chatInputHeight: 0,
+        chatInputSelection: null,
+        chatInputFocused: false,
         chatAttachments: [],
         chatPasteError: '',
         contactSyncAuthoritative: false,
@@ -1118,6 +1121,7 @@
         // Preserve scroll position of the moments/list body before re-render
         const body = mount.querySelector('.chat-app-body');
         const savedScroll = body ? body.scrollTop : 0;
+        const chatInputSnapshot = ['room', 'rpRoom'].includes(state.currentView) ? captureChatInputState() : null;
         const activeContact = byId(state.currentContactId) || state.contacts[0];
         const chatThemeKey = getContactChatThemeKey(activeContact);
         const _globalTheme = state.globalSettings?.theme || '';
@@ -1140,6 +1144,8 @@
       </div>
     `;
         bind();
+        const restoredInput = mount.querySelector('.chat-input');
+        if (restoredInput && chatInputSnapshot) restoreChatInputState(restoredInput, chatInputSnapshot);
         scrollToBottom();
         ensureRoomHistoryLoaded(activeContact);
         if (!['room', 'rpRoom'].includes(state.currentView)) {
@@ -1673,7 +1679,7 @@
 
         const chatInput = root()?.querySelector('.chat-input');
         if (chatInput) setChatInputText(chatInput, '');
-        state.chatInputDraft = '';
+        resetChatInputDraftState();
     }
 
     async function deleteContactSafe(contactId) {
@@ -3717,13 +3723,121 @@
         input.dataset.empty = text.trim() ? 'false' : 'true';
     }
 
+    function chatInputTextLength(input) {
+        return getChatInputText(input).length;
+    }
+
+    function getChatInputCaretOffset(input) {
+        const selection = window.getSelection?.();
+        if (!input?.isContentEditable || !selection || !selection.rangeCount || !selectionBelongsToInput(input)) return null;
+        const range = selection.getRangeAt(0);
+        const before = range.cloneRange();
+        before.selectNodeContents(input);
+        before.setEnd(range.startContainer, range.startOffset);
+        const start = before.toString().length;
+        before.setEnd(range.endContainer, range.endOffset);
+        return { start, end: before.toString().length };
+    }
+
+    function setChatInputCaretOffset(input, saved) {
+        if (!input?.isContentEditable || !saved) return;
+        const max = chatInputTextLength(input);
+        const start = Math.max(0, Math.min(max, Number(saved.start) || 0));
+        const end = Math.max(start, Math.min(max, Number(saved.end) || start));
+        const range = document.createRange();
+        const walker = document.createTreeWalker(input, NodeFilter.SHOW_TEXT);
+        let current = 0;
+        let startSet = false;
+        let endSet = false;
+        let node;
+        while ((node = walker.nextNode())) {
+            const len = node.nodeValue.length;
+            if (!startSet && current + len >= start) {
+                range.setStart(node, start - current);
+                startSet = true;
+            }
+            if (!endSet && current + len >= end) {
+                range.setEnd(node, end - current);
+                endSet = true;
+                break;
+            }
+            current += len;
+        }
+        if (!startSet) range.setStart(input, input.childNodes.length);
+        if (!endSet) range.setEnd(input, input.childNodes.length);
+        const selection = window.getSelection?.();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+    }
+
+    function syncChatInputHeight(input, { collapse = false } = {}) {
+        if (!input?.classList?.contains('chat-input')) return;
+        const wrap = input.closest('.composer-input-wrap');
+        if (!wrap) return;
+        if (collapse || !getChatInputText(input).trim()) {
+            state.chatInputHeight = 0;
+            wrap.style.removeProperty('height');
+            wrap.style.removeProperty('max-height');
+            wrap.scrollTop = 0;
+            return;
+        }
+        wrap.style.height = 'auto';
+        const nextHeight = Math.min(Math.max(34, input.scrollHeight + 14), 132);
+        state.chatInputHeight = nextHeight;
+        wrap.style.height = `${nextHeight}px`;
+        wrap.style.maxHeight = '132px';
+    }
+
+    function resetChatInputDraftState() {
+        state.chatInputDraft = '';
+        state.chatInputHeight = 0;
+        state.chatInputSelection = null;
+    }
+
+    function captureChatInputState() {
+        const input = root()?.querySelector('.chat-input');
+        if (!input) return null;
+        const focused = document.activeElement === input || selectionBelongsToInput(input);
+        const text = getChatInputText(input);
+        state.chatInputDraft = text;
+        state.chatInputFocused = focused;
+        state.chatInputSelection = focused ? getChatInputCaretOffset(input) : null;
+        const wrap = input.closest('.composer-input-wrap');
+        const height = wrap ? Math.round(wrap.getBoundingClientRect().height) : 0;
+        if (text.trim() && height > 34) state.chatInputHeight = height;
+        return {
+            text,
+            focused,
+            selection: state.chatInputSelection,
+            height: state.chatInputHeight,
+        };
+    }
+
     function restoreChatInputDraft(input) {
         if (!input?.classList?.contains('chat-input')) return;
         const draft = String(state.chatInputDraft || '');
         if (getChatInputText(input) !== draft) {
-            setChatInputText(input, draft);
+            setChatInputText(input, draft, { emitInput: false });
         } else {
             updateChatInputEmptyState(input);
+        }
+    }
+
+    function restoreChatInputState(input, snapshot = null) {
+        if (!input?.classList?.contains('chat-input')) return;
+        restoreChatInputDraft(input);
+        const draft = getChatInputText(input);
+        const wrap = input.closest('.composer-input-wrap');
+        const savedHeight = Number(snapshot?.height || state.chatInputHeight || 0);
+        if (draft.trim() && savedHeight > 34 && wrap) {
+            wrap.style.height = `${Math.min(savedHeight, 132)}px`;
+            wrap.style.maxHeight = '132px';
+        } else {
+            syncChatInputHeight(input, { collapse: !draft.trim() });
+        }
+        if (snapshot?.focused || state.chatInputFocused) {
+            input.focus({ preventScroll: true });
+            setChatInputCaretOffset(input, snapshot?.selection || state.chatInputSelection);
         }
     }
 
@@ -3735,7 +3849,7 @@
         return String(input.value || '');
     }
 
-    function setChatInputText(input, text = '') {
+    function setChatInputText(input, text = '', options = {}) {
         if (!input) return;
         const next = String(text || '');
         if (input.isContentEditable) {
@@ -3744,7 +3858,8 @@
             input.value = next;
         }
         updateChatInputEmptyState(input);
-        input.dispatchEvent(new Event('input', { bubbles: true }));
+        syncChatInputHeight(input, { collapse: !next.trim() });
+        if (options.emitInput !== false) input.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
     function selectionBelongsToInput(input) {
@@ -4163,9 +4278,26 @@
                     placeCaretAtEnd(chatInput);
                 });
             }
-            restoreChatInputDraft(chatInput);
+            restoreChatInputState(chatInput);
             chatInput.addEventListener('paste', handleChatInputPaste);
-            chatInput.addEventListener('input', () => updateChatInputEmptyState(chatInput));
+            chatInput.addEventListener('input', () => {
+                updateChatInputEmptyState(chatInput);
+                syncChatInputHeight(chatInput);
+            });
+            chatInput.addEventListener('focus', () => {
+                state.chatInputFocused = true;
+                state.chatInputSelection = getChatInputCaretOffset(chatInput);
+            });
+            chatInput.addEventListener('blur', () => {
+                state.chatInputFocused = false;
+                state.chatInputSelection = null;
+            });
+            chatInput.addEventListener('keyup', () => {
+                state.chatInputSelection = getChatInputCaretOffset(chatInput);
+            });
+            chatInput.addEventListener('mouseup', () => {
+                state.chatInputSelection = getChatInputCaretOffset(chatInput);
+            });
             chatInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -5172,6 +5304,9 @@
         }
         if (target?.classList?.contains('chat-input')) {
             state.chatInputDraft = getChatInputText(target);
+            state.chatInputFocused = true;
+            state.chatInputSelection = getChatInputCaretOffset(target);
+            syncChatInputHeight(target, { collapse: !state.chatInputDraft.trim() });
         }
         if (target.dataset.action === 'slide-contact') {
             const c = byId(state.currentContactId);
@@ -6640,7 +6775,7 @@
         const userId = `rp_u_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         upsertMessage(state.currentRpMessages, { id: userId, client_message_id: userId, role: 'user', text, content: text, time: nowTimeStr(), timestamp: new Date().toISOString(), created_at: new Date().toISOString() });
         setChatInputText(input, '');
-        state.chatInputDraft = '';
+        resetChatInputDraftState();
         const aiId = 'rp_ai_' + Date.now();
         state.currentRpMessages.push({ id: aiId, role: 'ai', text: '', content: '', time: '', created_at: new Date().toISOString(), typing: true });
         if (state.currentRpRoomId) state.rpMessages[state.currentRpRoomId] = state.currentRpMessages.map(normalizeStoredMessage);
@@ -6794,7 +6929,7 @@
         c.lastMessage = attachmentLastMessage(rawText, attachments);
         c.lastTime = '刚刚';
         setChatInputText(input, '');
-        state.chatInputDraft = '';
+        resetChatInputDraftState();
         state.chatAttachments = [];
 
         const aiId = 'ai_' + Date.now();
@@ -7059,7 +7194,7 @@
         c.lastMessage = attachmentLastMessage(rawText, attachments);
         c.lastTime = '\u521a\u521a';
         setChatInputText(input, '');
-        state.chatInputDraft = '';
+        resetChatInputDraftState();
         state.chatAttachments = [];
 
         const aiId = 'ai_' + Date.now();
@@ -7549,7 +7684,7 @@
         c.lastMessage = attachmentLastMessage(rawText, attachments);
         c.lastTime = '\u521a\u521a';
         setChatInputText(input, '');
-        state.chatInputDraft = '';
+        resetChatInputDraftState();
         state.chatAttachments = [];
         // Buffer: debounce AI request, extend timer while user is typing
         if (!_chatMsgBuffers[c.id]) _chatMsgBuffers[c.id] = { texts: [], timer: null, listener: null };

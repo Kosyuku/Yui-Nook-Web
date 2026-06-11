@@ -1356,9 +1356,10 @@
     flex: 1;
     min-width: 0;
     background: rgba(255, 255, 255, 0.96);
-    border-radius: 999px;
-    padding: 0 12px;
-    height: 34px;
+    border-radius: 17px;
+    padding: 7px 12px;
+    min-height: 34px;
+    max-height: 132px;
     display: flex;
     align-items: center;
     box-sizing: border-box;
@@ -1433,15 +1434,16 @@
     width: 100%;
     flex: 1 1 auto;
     min-width: 0;
-    height: 100%;
-    min-height: 0;
+    height: auto;
+    min-height: 20px;
+    max-height: 116px;
     border: none;
     outline: none;
     background: transparent;
     font: inherit;
     font-family: inherit;
     font-size: 13px;
-    line-height: 34px;
+    line-height: 20px;
     padding: 0;
     margin: 0;
     display: block;
@@ -1449,8 +1451,10 @@
     text-align: left;
     direction: ltr;
     unicode-bidi: plaintext;
-    white-space: nowrap;
-    overflow: hidden;
+    white-space: pre-wrap;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overflow-wrap: anywhere;
     appearance: none;
     -webkit-appearance: none;
     caret-color: rgba(64, 50, 56, 0.88);
@@ -1459,6 +1463,15 @@
 
 .chat-input[contenteditable="true"] {
     position: relative;
+}
+
+.sheet-input {
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    line-height: 34px;
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 .chat-input b,
