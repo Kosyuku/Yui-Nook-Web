@@ -813,9 +813,41 @@
   line-height: 1.5;
   max-width: 100%;
   min-width: 0;
-  white-space: pre-wrap;
+  white-space: normal;
   overflow-wrap: break-word;
   word-break: normal;
+}
+
+.message-text p {
+  margin: 0;
+}
+
+.message-text p + p,
+.message-text p + ul,
+.message-text p + ol,
+.message-text p + blockquote,
+.message-text ul + p,
+.message-text ol + p,
+.message-text blockquote + p {
+  margin-top: 0.65em;
+}
+
+.message-text ul,
+.message-text ol {
+  margin: 0.35em 0 0.35em 1.25em;
+  padding: 0;
+}
+
+.message-text li {
+  margin: 0.18em 0;
+  padding-left: 0.1em;
+}
+
+.message-text blockquote {
+  margin: 0.45em 0;
+  padding: 0.25em 0 0.25em 0.75em;
+  border-left: 3px solid rgba(160, 132, 146, 0.32);
+  color: rgba(78, 64, 72, 0.82);
 }
 
 .message-text > *,
@@ -835,11 +867,79 @@
   white-space: pre;
   overflow-wrap: normal;
   word-break: normal;
+  margin: 0.55em 0;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: rgba(70, 58, 66, 0.08);
 }
 
 .message-text code {
   overflow-wrap: anywhere;
   word-break: normal;
+  padding: 0.1em 0.28em;
+  border-radius: 5px;
+  background: rgba(70, 58, 66, 0.08);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.message-text pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.rp-action p,
+.rp-dialogue p {
+  margin: 0;
+}
+
+.rp-action p + p,
+.rp-dialogue p + p,
+.rp-action ul,
+.rp-dialogue ul,
+.rp-action ol,
+.rp-dialogue ol,
+.rp-action blockquote,
+.rp-dialogue blockquote,
+.rp-action pre,
+.rp-dialogue pre {
+  margin-top: 0.55em;
+}
+
+.rp-action ul,
+.rp-dialogue ul,
+.rp-action ol,
+.rp-dialogue ol {
+  margin-left: 1.25em;
+  padding: 0;
+}
+
+.rp-action blockquote,
+.rp-dialogue blockquote {
+  padding-left: 0.75em;
+  border-left: 3px solid rgba(180, 140, 210, 0.28);
+}
+
+.rp-action code,
+.rp-dialogue code {
+  padding: 0.1em 0.28em;
+  border-radius: 5px;
+  background: rgba(120, 80, 160, 0.12);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.rp-action pre,
+.rp-dialogue pre {
+  overflow-x: auto;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: rgba(120, 80, 160, 0.12);
+}
+
+.rp-action pre code,
+.rp-dialogue pre code {
+  padding: 0;
+  background: transparent;
 }
 
 .message-text a,

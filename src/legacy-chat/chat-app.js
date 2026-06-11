@@ -395,7 +395,7 @@
             msgEl.className = 'message-text';
             bubble.appendChild(msgEl);
         }
-        if (msgEl) msgEl.textContent = normalizeBubbleText(fullText);
+        if (msgEl) msgEl.innerHTML = renderMessageTextHtml(normalizeBubbleText(fullText));
         if (fullThinking) {
             // New v2 thinking-line DOM
             patchThinkingLineDom(msgId, fullThinking, false);
@@ -636,18 +636,135 @@
             .join('\n\n');
     }
 
-    function renderMessageTextHtml(text = '') {
-        const raw = String(text || '');
-        const urlPattern = /https?:\/\/[^\s<>"']+/g;
-        let html = '';
-        let lastIndex = 0;
-        for (const match of raw.matchAll(urlPattern)) {
-            html += escapeHtml(raw.slice(lastIndex, match.index));
-            html += `<span class="message-url">${escapeHtml(match[0])}</span>`;
-            lastIndex = match.index + match[0].length;
-        }
-        html += escapeHtml(raw.slice(lastIndex));
+    function sanitizeRenderedMessageHtml(html = '') {
+        const allowedTags = new Set(['P', 'BR', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'STRONG', 'EM', 'CODE', 'PRE', 'SPAN']);
+        const allowedClasses = new Set(['message-url', 'rp-action', 'rp-dialogue']);
+        const template = document.createElement('template');
+        template.innerHTML = String(html || '');
+        const cleanNode = (node) => {
+            if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent || '');
+            if (node.nodeType !== Node.ELEMENT_NODE) return document.createTextNode('');
+            const tag = node.tagName;
+            const fragment = document.createDocumentFragment();
+            Array.from(node.childNodes).forEach((child) => fragment.appendChild(cleanNode(child)));
+            if (!allowedTags.has(tag)) return fragment;
+            const out = document.createElement(tag.toLowerCase());
+            if (tag === 'SPAN') {
+                const kept = String(node.getAttribute('class') || '')
+                    .split(/\s+/)
+                    .filter((cls) => allowedClasses.has(cls));
+                if (kept.length) out.setAttribute('class', kept.join(' '));
+            }
+            out.appendChild(fragment);
+            return out;
+        };
+        const out = document.createElement('div');
+        Array.from(template.content.childNodes).forEach((node) => out.appendChild(cleanNode(node)));
+        return out.innerHTML;
+    }
+
+    function renderInlineMarkdown(text = '') {
+        const codeParts = [];
+        const stashCode = (_match, code) => {
+            const token = `\u0000CODE${codeParts.length}\u0000`;
+            codeParts.push(`<code>${escapeHtml(code)}</code>`);
+            return token;
+        };
+        let html = String(text || '').replace(/`([^`\n]+)`/g, stashCode);
+        html = escapeHtml(html)
+            .replace(/\*\*([^*\n]+(?:[\s\S]*?[^*\n])?)\*\*/g, '<strong>$1</strong>')
+            .replace(/__([^_\n]+(?:[\s\S]*?[^_\n])?)__/g, '<strong>$1</strong>')
+            .replace(/(^|[^\*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+            .replace(/(^|[^_])_([^_\n]+)_/g, '$1<em>$2</em>')
+            .replace(/https?:\/\/[^\s<>"']+/g, '<span class="message-url">$&</span>');
+        codeParts.forEach((code, index) => {
+            html = html.replaceAll(escapeHtml(`\u0000CODE${index}\u0000`), code);
+        });
         return html;
+    }
+
+    function renderMarkdownToHtml(text = '') {
+        const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
+        let html = '';
+        let paragraph = [];
+        let listType = '';
+        let listItems = [];
+        let quote = [];
+        let inFence = false;
+        let fenceLines = [];
+
+        const flushParagraph = () => {
+            if (!paragraph.length) return;
+            html += `<p>${paragraph.map(renderInlineMarkdown).join('<br>')}</p>`;
+            paragraph = [];
+        };
+        const flushList = () => {
+            if (!listItems.length || !listType) return;
+            html += `<${listType}>${listItems.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join('')}</${listType}>`;
+            listType = '';
+            listItems = [];
+        };
+        const flushQuote = () => {
+            if (!quote.length) return;
+            html += `<blockquote>${quote.map(renderInlineMarkdown).join('<br>')}</blockquote>`;
+            quote = [];
+        };
+        const flushBlocks = () => {
+            flushParagraph();
+            flushList();
+            flushQuote();
+        };
+
+        lines.forEach((line) => {
+            if (/^\s*```/.test(line)) {
+                if (inFence) {
+                    html += `<pre><code>${escapeHtml(fenceLines.join('\n'))}</code></pre>`;
+                    fenceLines = [];
+                    inFence = false;
+                } else {
+                    flushBlocks();
+                    inFence = true;
+                    fenceLines = [];
+                }
+                return;
+            }
+            if (inFence) {
+                fenceLines.push(line);
+                return;
+            }
+            if (!line.trim()) {
+                flushBlocks();
+                return;
+            }
+            const unordered = line.match(/^\s*[-*+]\s+(.+)$/);
+            const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+            const quoted = line.match(/^\s*>\s?(.*)$/);
+            if (unordered || ordered) {
+                flushParagraph();
+                flushQuote();
+                const nextType = ordered ? 'ol' : 'ul';
+                if (listType && listType !== nextType) flushList();
+                listType = nextType;
+                listItems.push((unordered || ordered)[1]);
+                return;
+            }
+            if (quoted) {
+                flushParagraph();
+                flushList();
+                quote.push(quoted[1]);
+                return;
+            }
+            flushList();
+            flushQuote();
+            paragraph.push(line);
+        });
+        if (inFence) html += `<pre><code>${escapeHtml(fenceLines.join('\n'))}</code></pre>`;
+        flushBlocks();
+        return sanitizeRenderedMessageHtml(html);
+    }
+
+    function renderMessageTextHtml(text = '') {
+        return renderMarkdownToHtml(text);
     }
 
     function assistantChunkDelay(text) {
@@ -2735,7 +2852,7 @@
         return parts.map((part) => {
             const isAction = /^\s*(\[|［)/.test(part);
             const cls = isAction ? 'rp-action' : 'rp-dialogue';
-            return `<span class="${cls}">${escapeHtml(part)}</span>`;
+            return `<div class="${cls}">${renderMarkdownToHtml(part)}</div>`;
         }).join('');
     }
 
