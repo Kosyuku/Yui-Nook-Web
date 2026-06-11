@@ -668,8 +668,8 @@
 
 .message-row.from-user .message-bubble-wrap {
   align-items: flex-end;
-  max-width: 76%;
-  min-width: min(160px, 76%);
+  max-width: 78%;
+  min-width: 11em;
 }
 
 .bubble-meta-row {
@@ -810,7 +810,7 @@
   border-color: rgba(231, 210, 219, 0.96);
   box-shadow: 0 4px 12px rgba(181, 149, 163, 0.08);
   border-radius: 12px 8px 12px 12px;
-  min-width: min(160px, 100%);
+  min-width: 11em;
 }
 
 .message-text {
@@ -3178,7 +3178,8 @@
   .chat-app-body { padding-inline: 12px; }
   .room-layout { padding-inline: 8px; }
   .message-row.from-ai .message-bubble-wrap { max-width: 82%; }
-  .message-row.from-user .message-bubble-wrap { max-width: 76%; }
+  .message-row.from-user .message-bubble-wrap { max-width: 78%; min-width: 10em; }
+  .message-bubble.from-user { min-width: 10em; }
 }
 
 
