@@ -4401,8 +4401,7 @@
                 inputWrap.dataset.focusBound = '1';
                 inputWrap.addEventListener('pointerdown', (event) => {
                     if (event.target === chatInput || event.target.closest('[data-action]')) return;
-                    event.preventDefault();
-                    placeCaretAtEnd(chatInput);
+                    chatInput.focus({ preventScroll: true });
                 });
                 inputWrap.addEventListener('click', (event) => {
                     if (event.target === chatInput || event.target.closest('[data-action]')) return;
@@ -4428,6 +4427,9 @@
             });
             chatInput.addEventListener('mouseup', () => {
                 state.chatInputSelection = getChatInputCaretOffset(chatInput);
+            });
+            chatInput.addEventListener('selectstart', () => {
+                state.chatInputFocused = true;
             });
             chatInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {

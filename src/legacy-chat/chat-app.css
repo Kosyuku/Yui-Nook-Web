@@ -1553,6 +1553,7 @@
 .chat-input,
 .sheet-input {
     width: 100%;
+    max-width: 100%;
     flex: 1 1 auto;
     min-width: 0;
     height: auto;
@@ -1584,6 +1585,7 @@
 
 .chat-input[contenteditable="true"] {
     position: relative;
+    display: block;
 }
 
 .sheet-input {
@@ -1618,6 +1620,10 @@
     content: attr(data-placeholder);
     color: rgba(156, 131, 140, 0.72);
     pointer-events: none;
+}
+
+.chat-input[contenteditable="true"][data-empty="true"]:focus::before {
+    content: "";
 }
 
 .chat-input::placeholder,
