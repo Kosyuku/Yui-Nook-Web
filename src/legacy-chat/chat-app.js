@@ -5646,7 +5646,7 @@
                 parts.push({ index: j, text });
                 const joined = parts.map((part) => part.text).join('');
                 if (joined === fullText || (parts.length >= 2 && fullText.includes(joined) && joined.length >= Math.max(24, Math.floor(fullText.length * 0.65)))) {
-                    parts.forEach((part) => remove.add(part.index));
+                    remove.add(i);
                     break;
                 }
                 if (!fullText.startsWith(joined) && !fullText.includes(joined)) break;
