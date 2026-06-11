@@ -831,6 +831,11 @@
             state.assistantPlayback.token = '';
             state.assistantPlayback.timer = null;
         }
+        const finalPreview = String(options.fullText || list.join('\n\n')).trim();
+        if (finalPreview) {
+            contact.lastMessage = finalPreview;
+            contact.lastTime = nowTimeStr();
+        }
         queueLocalSyncIfChanged(120);
     }
 
@@ -5650,6 +5655,22 @@
                     break;
                 }
                 if (!fullText.startsWith(joined) && !fullText.includes(joined)) break;
+                if (joined.length > fullText.length + 8) break;
+            }
+            const previousParts = [];
+            for (let j = i - 1; j >= 0; j -= 1) {
+                const item = normalizeStoredMessage(sorted[j]);
+                if (item.role === 'user') break;
+                if (item.role !== 'ai') continue;
+                const text = compactAssistantText(messageTextValue(item));
+                if (!text) continue;
+                previousParts.unshift(text);
+                const joined = previousParts.join('');
+                if (joined === fullText || (previousParts.length >= 2 && fullText.includes(joined) && joined.length >= Math.max(24, Math.floor(fullText.length * 0.65)))) {
+                    remove.add(i);
+                    break;
+                }
+                if (!fullText.endsWith(joined) && !fullText.includes(joined)) break;
                 if (joined.length > fullText.length + 8) break;
             }
         }
