@@ -6994,10 +6994,18 @@
                 if (obj2.name) toolCall = { name: String(obj2.name), status: String(obj2.status || 'done') };
             } catch { /* ignore */ }
         }
+        let voice = null;
+        if (/^voice$/i.test(eventType)) {
+            try {
+                const vobj = JSON.parse(payload);
+                if (vobj.audioUrl) voice = { audioUrl: String(vobj.audioUrl), mimeType: String(vobj.mimeType || 'audio/mpeg') };
+            } catch { /* ignore */ }
+        }
         return {
             text: coerceSseText(text),
             thinking: coerceSseText(thinking),
             toolCall,
+            voice,
         };
     }
 
@@ -7811,6 +7819,15 @@
                         }
                     }
 
+                    if (parsed.voice && parsed.voice.audioUrl) {
+                        // AI 调 voice.speak 发来的音频：挂到当前消息上，渲染成语音条（文字默认收起）
+                        const idxV = aiIdx();
+                        if (idxV !== -1) {
+                            c.messages[idxV] = { ...c.messages[idxV], voiceUrl: parsed.voice.audioUrl, voiceShowText: false, streaming: true };
+                            render();
+                        }
+                    }
+
                     if (chunk) {
                         fullText += chunk;
                         const inlineSplit = splitInlineReasoningReply(fullText);
@@ -7890,19 +7907,21 @@
             if (finalThinking) {
                 delete state.openThinkingIds[aiId];
             }
+            // 保留流式期间挂上的语音（AI 调 voice.speak 发来的音频）
+            const voiceUrlFinal = idx !== -1 ? (c.messages[idx]?.voiceUrl || '') : '';
             const chunks = splitAssistantReply(finalText);
-            if (idx !== -1 && chunks.length > 1) {
+            if (idx !== -1 && chunks.length > 1 && !voiceUrlFinal) {
                 removeMessageFromContact(c, aiId);
                 render();
                 scrollToBottom();
                 await wait(180);
-                await playAssistantChunks(c, chunks, { 
+                await playAssistantChunks(c, chunks, {
                     startIndex: idx,
                     thinking: finalThinking,
                     toolCalls: fullToolCalls
                 });
             } else {
-                if (idx !== -1 && finalText) {
+                if (idx !== -1 && (finalText || voiceUrlFinal)) {
                     c.messages[idx] = {
                         id: aiId,
                         role: 'ai',
@@ -7910,6 +7929,7 @@
                         content: finalText,
                         ...(finalThinking ? { thinking: finalThinking } : {}),
                         ...(fullToolCalls ? { toolCalls: fullToolCalls } : {}),
+                        ...(voiceUrlFinal ? { voiceUrl: voiceUrlFinal, voiceShowText: false } : {}),
                         time: nowTimeStr(),
                         created_at: new Date().toISOString(),
                         typing: false,
