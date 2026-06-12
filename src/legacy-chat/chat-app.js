@@ -2399,6 +2399,14 @@
         const inlineTime = showInlineTime ? `<time class="bubble-time">${escapeHtml(message.time)}</time>` : '';
         const timedBubbleClass = showInlineTime ? ' has-time' : '';
         const showSourceMeta = message.role === 'ai' && sourceBadge;
+        const hasVoice = message.role === 'ai' && !!message.voiceUrl;
+        const voiceBarInline = hasVoice ? renderVoiceBar(message) : '';
+        const textBody = `${attachmentBlock}${text ? `<div class="message-text">${renderMessageTextHtml(text)}</div>` : ''}`;
+        const bubbleBody = (message.typing || (message.streaming && !message.text))
+            ? `<div class="typing-dots"><span></span><span></span><span></span></div>`
+            : (hasVoice && !message.voiceShowText)
+                ? voiceBarInline
+                : `${textBody}${hasVoice ? voiceBarInline : ''}${inlineTime}`;
         const bubbleWrap = `
           <div class="message-bubble-wrap${sizeClass}">
             ${showSourceMeta ? `<div class="bubble-meta-row">
@@ -2406,36 +2414,41 @@
             </div>` : ''}
             <div class="message-bubble ${roleClass}${bubbleClassExtra}${timedBubbleClass}" data-msg-id="${message.id}" data-action="toggle-message-tools" data-id="${message.id}">
               ${cotButton}
-              ${(message.typing || (message.streaming && !message.text))
-                  ? `<div class="typing-dots"><span></span><span></span><span></span></div>`
-                  : `${attachmentBlock}${text ? `<div class="message-text">${renderMessageTextHtml(text)}</div>` : ''}${inlineTime}`}
+              ${bubbleBody}
             </div>
             ${bottomTools}
           </div>`;
         const colInner = message.role === 'ai' && (thinkingBlock || toolLinesBlock)
             ? `${thinkingBlock}${toolLinesBlock}${bubbleWrap}`
             : `${bubbleWrap}${thinkingBlock}${toolLinesBlock}`;
-        const voiceBar = message.role === 'ai' ? renderVoiceBar(message) : '';
+        const voiceStatus = message.role === 'ai' ? renderVoiceStatus(message) : '';
         return `
       <div class="message-row ${roleClass}" data-msg-id="${message.id}">
         ${avatar}
         <div class="message-bubble-col">
           ${colInner}
-          ${voiceBar}
+          ${voiceStatus}
         </div>
       </div>
     `;
     }
 
     function renderVoiceBar(message) {
+        // 有语音时气泡里显示语音条 + 末尾“转文字”切换按钮（点一下播放，不自动播）
+        const toLabel = message.voiceShowText ? '收起文字' : '转文字';
+        return `
+          <div class="voice-bar-wrap" style="display:flex;align-items:center;gap:8px;min-width:180px;">
+            <audio class="voice-bar" data-voice-id="${message.id}" controls preload="auto" src="${escapeHtml(message.voiceUrl)}" style="height:34px;flex:1 1 auto;max-width:220px;"></audio>
+            <button type="button" class="voice-totext-btn" data-action="toggle-voice-text" data-id="${message.id}" style="background:none;border:none;padding:2px 4px;font-size:12px;line-height:1;color:rgba(120,100,90,.72);cursor:pointer;white-space:nowrap;">${toLabel}</button>
+          </div>`;
+    }
+
+    function renderVoiceStatus(message) {
         if (message.voiceLoading) {
-            return `<div class="voice-bar-status" data-voice-id="${message.id}">语音合成中…</div>`;
+            return `<div class="voice-bar-status" style="font-size:12px;color:rgba(120,100,90,.7);margin-top:4px;">语音合成中…</div>`;
         }
         if (message.voiceError) {
-            return `<div class="voice-bar-status voice-bar-error" data-voice-id="${message.id}">语音失败：${escapeHtml(message.voiceError)}</div>`;
-        }
-        if (message.voiceUrl) {
-            return `<audio class="voice-bar" data-voice-id="${message.id}" controls preload="auto" src="${escapeHtml(message.voiceUrl)}"></audio>`;
+            return `<div class="voice-bar-status voice-bar-error" style="font-size:12px;color:#c8736a;margin-top:4px;">语音失败：${escapeHtml(message.voiceError)}</div>`;
         }
         return '';
     }
@@ -5461,6 +5474,12 @@
             speakChatMessage(target.dataset.id);
         }
 
+        if (action === 'toggle-voice-text') {
+            const contact = byId(state.currentContactId);
+            const msg = contact?.messages?.find((item) => item.id === target.dataset.id);
+            if (msg) { msg.voiceShowText = !msg.voiceShowText; render(); }
+        }
+
         if (action === 'attach-option') {
             state.showAttach = false;
             const label = target.dataset.label || '';
@@ -5947,12 +5966,9 @@
             }
             msg.voiceUrl = data.audioUrl;
             msg.voiceLoading = false;
+            // 默认隐藏文字、直接出语音条；点条上的播放键播放（不自动播）
+            msg.voiceShowText = false;
             render();
-            // 合成成功后自动播一次（点击是用户手势，多数浏览器允许）
-            requestAnimationFrame(() => {
-                const el = root()?.querySelector(`audio.voice-bar[data-voice-id="${rawId}"]`);
-                if (el) el.play().catch(() => {});
-            });
         } catch (error) {
             msg.voiceLoading = false;
             msg.voiceError = String(error?.message || error || '请求失败');
