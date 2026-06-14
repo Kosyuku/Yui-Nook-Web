@@ -1410,6 +1410,18 @@
   -webkit-text-fill-color: unset;
 }
 
+.tool-line.tl-error .tool-dot {
+  background: rgba(200,115,106,.45);
+}
+.tool-line.tl-error .tool-icon svg {
+  stroke: rgba(200,115,106,.55);
+}
+.tool-line.tl-error .tool-text {
+  color: rgba(180,92,84,.72);
+  background: none;
+  -webkit-text-fill-color: unset;
+}
+
 /* composer-zone is no longer sticky — it's the natural last child in a flex column */
 .composer-zone {
   flex-shrink: 0;

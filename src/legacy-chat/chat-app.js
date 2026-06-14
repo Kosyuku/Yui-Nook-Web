@@ -464,8 +464,10 @@
     function renderToolLines(toolCalls = []) {
         if (!toolCalls.length) return '';
         const lines = toolCalls.map(tc => {
-            const tlState = tc.status === 'running' ? 'tl-active' : 'tl-done';
-            const label = `${tc.name} → ${tc.status === 'running' ? '调用中…' : '完成'}`;
+            const isError = tc.status === 'error' || tc.status === 'failed';
+            const tlState = tc.status === 'running' ? 'tl-active' : isError ? 'tl-error' : 'tl-done';
+            const statusLabel = tc.status === 'running' ? '调用中…' : isError ? '失败' : '完成';
+            const label = `${tc.name} → ${statusLabel}`;
             return `
           <div class="tool-line ${tlState}">
             <div class="tool-dot"></div>
@@ -6999,6 +7001,7 @@
             try {
                 const vobj = JSON.parse(payload);
                 if (vobj.audioUrl) voice = { audioUrl: String(vobj.audioUrl), mimeType: String(vobj.mimeType || 'audio/mpeg') };
+                else if (vobj.error) voice = { error: String(vobj.error) };
             } catch { /* ignore */ }
         }
         return {
@@ -7819,11 +7822,13 @@
                         }
                     }
 
-                    if (parsed.voice && parsed.voice.audioUrl) {
+                    if (parsed.voice && (parsed.voice.audioUrl || parsed.voice.error)) {
                         // AI 调 voice.speak 发来的音频：挂到当前消息上，渲染成语音条（文字默认收起）
                         const idxV = aiIdx();
                         if (idxV !== -1) {
-                            c.messages[idxV] = { ...c.messages[idxV], voiceUrl: parsed.voice.audioUrl, voiceShowText: false, streaming: true };
+                            c.messages[idxV] = parsed.voice.audioUrl
+                                ? { ...c.messages[idxV], voiceUrl: parsed.voice.audioUrl, voiceError: '', voiceShowText: false, streaming: true }
+                                : { ...c.messages[idxV], voiceLoading: false, voiceError: parsed.voice.error, streaming: true };
                             render();
                         }
                     }
