@@ -12,7 +12,7 @@
             unread: 2,
             pinned: true,
             avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300&q=80',
-            theme: 'rose',
+            theme: 'cream',
             settings: {
                 model: 'gpt-5.4',
                 modelProviderId: 'openai',
@@ -289,7 +289,7 @@
         .replaceAll("'", '&#39;');
 
     const CHAT_UI_THEMES = [
-        { key: 'default', name: '默认主题', desc: '干净柔和的默认聊天界面', roomTheme: 'rose', aliases: ['默认玫瑰', '默认'] },
+        { key: 'default', name: '暖纸', desc: '奶油暖纸感的默认界面', roomTheme: 'cream', aliases: ['默认玫瑰', '默认', '默认主题', 'rose'] },
         { key: 'pink', name: '蜜桃粉', desc: '更甜一点的粉色聊天氛围', roomTheme: 'rose', aliases: ['奶茶'] },
         { key: 'dark', name: '夜色', desc: '低亮度深色聊天界面', roomTheme: 'rose', aliases: [] },
         { key: 'glass', name: '玻璃雾', desc: '通透轻雾感的玻璃界面', roomTheme: 'mist', aliases: ['晴空'] },

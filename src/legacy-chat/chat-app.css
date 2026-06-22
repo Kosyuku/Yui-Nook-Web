@@ -522,7 +522,7 @@
   flex: 1;
   min-height: 0;
   overflow: hidden; /* critical: clips so messages-panel scrolls internally */
-  background-image: radial-gradient(rgba(200, 175, 185, 0.25) 1.5px, transparent 1.5px);
+  background-image: radial-gradient(rgba(190, 176, 158, 0.16) 1.5px, transparent 1.5px);
   background-size: 22px 22px;
 }
 
