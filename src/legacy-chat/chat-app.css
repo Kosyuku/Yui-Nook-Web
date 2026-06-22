@@ -6913,6 +6913,15 @@ button.model-choice-item {
   background: linear-gradient(145deg, #E6B3C0, #CF8A9B) !important;
 }
 
+/* warm leftover lilac accents */
+#chat-app-root[data-theme="claude"] .btn-composer-submit {
+  background: var(--chat-ui-send, #2A2521) !important;
+  border-color: rgba(42, 37, 33, 0.12) !important;
+}
+#chat-app-root[data-theme="claude"] .moment-likes-area .heart-mini {
+  color: #CF8A9B !important;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    窗台 · Windowsill theme — sage / clay / linen / botanical calm
    ═══════════════════════════════════════════════════════════════ */
