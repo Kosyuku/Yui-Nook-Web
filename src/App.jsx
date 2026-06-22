@@ -2379,6 +2379,15 @@ export default function App() {
   const [phone, setPhone] = useState(createInitialPhone);
   const [phoneLoaded, setPhoneLoaded] = useState(false);
   const [screenMotion, setScreenMotion] = useState("idle");
+  const [skin, setSkin] = useState(() => {
+    try { return localStorage.getItem("yui_skin") || "warm"; } catch { return "warm"; }
+  });
+  useEffect(() => {
+    const el = document.documentElement;
+    if (skin === "lavender") el.setAttribute("data-theme", "lavender");
+    else el.removeAttribute("data-theme");
+    try { localStorage.setItem("yui_skin", skin); } catch { /* ignore */ }
+  }, [skin]);
   const unlockGuardUntil = useRef(0);
 
   useEffect(() => {
@@ -2511,6 +2520,20 @@ export default function App() {
     <div className={`phone-root screen-motion-${screenMotion}`} style={{ fontSize: `calc(16px * ${phone.fontScale / 100})` }}>
       {screen === "lock" && <LegacyLockScreen onUnlock={unlockToHome} />}
       {screen === "home" && <LegacyHomePage onOpenApp={openApp} phone={phone} />}
+      {screen === "home" && (
+        <button
+          onClick={() => setSkin((s) => (s === "lavender" ? "warm" : "lavender"))}
+          aria-label="切换皮肤"
+          style={{
+            position: "absolute", right: 14, top: "calc(14px + env(safe-area-inset-top, 0px))", zIndex: 50,
+            padding: "6px 12px", borderRadius: 999, fontSize: 12, lineHeight: 1,
+            color: "var(--ink)", background: "var(--white)", border: "1px solid var(--line)",
+            backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", boxShadow: "0 4px 16px rgba(0,0,0,.06)",
+          }}
+        >
+          {skin === "lavender" ? "🎨 薰衣草" : "🎨 暖纸"}
+        </button>
+      )}
       {screen === "app" && <AppShell appId={activeApp} onHome={goHome} phone={phone} setPhone={setPhone} />}
     </div>
   );

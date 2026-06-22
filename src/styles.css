@@ -16,6 +16,18 @@
   background: #faf8f4;
 }
 
+/* 皮肤：薰衣草（原默认紫），<html data-theme="lavender"> 时启用 */
+:root[data-theme="lavender"] {
+  --accent: #a087c4;
+  --accent-soft: rgba(160, 135, 196, 0.18);
+  --ink: #3f3946;
+  --muted: rgba(63, 57, 70, 0.56);
+  --line: rgba(143, 124, 158, 0.16);
+  --glass: rgba(255, 255, 255, 0.56);
+  --white: rgba(255, 255, 255, 0.82);
+  background: #f4f0f7;
+}
+
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
