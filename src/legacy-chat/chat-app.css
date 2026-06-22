@@ -6908,6 +6908,11 @@ button.model-choice-item {
   border-color: rgba(207, 138, 155, 0.32) !important;
 }
 
+/* warm toggles (was lilac) */
+#chat-app-root[data-theme="claude"] .switch-btn.on .switch-track {
+  background: linear-gradient(145deg, #E6B3C0, #CF8A9B) !important;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    窗台 · Windowsill theme — sage / clay / linen / botanical calm
    ═══════════════════════════════════════════════════════════════ */
