@@ -3,16 +3,17 @@
 :root {
   --app-height: 100dvh;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --accent: #a087c4;
-  --accent-soft: rgba(160, 135, 196, 0.18);
-  --ink: #3f3946;
-  --muted: rgba(63, 57, 70, 0.56);
-  --line: rgba(143, 124, 158, 0.16);
-  --glass: rgba(255, 255, 255, 0.56);
-  --white: rgba(255, 255, 255, 0.82);
+  /* 暖纸风 token：奶油底 + 玫瑰粉点缀 + 暖墨重音（仿官方 Claude 暖纸感） */
+  --accent: #cf8a9b;
+  --accent-soft: rgba(207, 138, 155, 0.16);
+  --ink: #2a2521;
+  --muted: rgba(42, 37, 33, 0.55);
+  --line: rgba(42, 37, 33, 0.08);
+  --glass: rgba(255, 253, 250, 0.62);
+  --white: rgba(255, 255, 255, 0.86);
   font-family: "Zen Maru Gothic", "Noto Sans SC", system-ui, sans-serif;
   color: var(--ink);
-  background: #f4f0f7;
+  background: #faf8f4;
 }
 
 * {

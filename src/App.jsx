@@ -2373,7 +2373,7 @@ function normalizeLegacyPhoneApp(app, page = 0) {
 }
 
 export default function App() {
-  const [screen, setScreen] = useState("lock");
+  const [screen, setScreen] = useState("home");
   const [activeApp, setActiveApp] = useState(null);
   const [pageIndex, setPageIndex] = useState(0);
   const [phone, setPhone] = useState(createInitialPhone);
