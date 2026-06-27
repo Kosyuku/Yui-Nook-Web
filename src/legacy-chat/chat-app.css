@@ -1322,6 +1322,83 @@
    工具调用 — tool-line
    ═══════════════════════════════════════════════════════ */
 
+/* 折叠工具卡（终端可视化）—— 借鉴 Prism，配色随主题 */
+.ch-tool-group {
+  margin: 2px 0 4px;
+  border: 1px solid var(--chat-ui-border, rgba(42, 37, 33, 0.10));
+  border-radius: 12px;
+  background: var(--chat-ui-surface, rgba(255, 253, 249, 0.7));
+  overflow: hidden;
+}
+.ch-tool-group > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.ch-tool-group > summary::-webkit-details-marker { display: none; }
+.ch-tool-group-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: var(--chat-ui-text, rgba(42, 37, 33, 0.85));
+}
+.ch-tool-group-head .tg-chev {
+  flex: 0 0 auto;
+  color: var(--chat-ui-muted, rgba(42, 37, 33, 0.45));
+  transition: transform 0.18s ease;
+}
+.ch-tool-group[open] .ch-tool-group-head .tg-chev { transform: rotate(90deg); }
+.ch-tool-group-head .tg-icon {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+}
+.ch-tool-group-head .tg-icon svg { width: 14px; height: 14px; }
+.ch-tool-group-head .tg-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.ch-tool-group-head .tg-count {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--chat-ui-accent-soft, rgba(207, 138, 155, 0.18));
+  color: var(--chat-ui-accent, #cf8a9b);
+}
+.ch-tool-group-head .tg-spinner {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid var(--chat-ui-border, rgba(42, 37, 33, 0.18));
+  border-top-color: var(--chat-ui-accent, #cf8a9b);
+  animation: tg-spin 0.7s linear infinite;
+}
+@keyframes tg-spin { to { transform: rotate(360deg); } }
+.ch-tool-group.inflight {
+  border-color: var(--chat-ui-accent, rgba(207, 138, 155, 0.45));
+}
+.ch-tool-group-body {
+  padding: 2px 6px 6px;
+  border-top: 1px solid var(--chat-ui-border-soft, rgba(42, 37, 33, 0.06));
+}
+
 .tool-lines-wrap {
   display: flex;
   flex-direction: column;

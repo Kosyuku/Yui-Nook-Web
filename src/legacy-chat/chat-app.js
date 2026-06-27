@@ -475,7 +475,27 @@
             <span class="tool-text">${escapeHtml(label)}</span>
           </div>`;
         }).join('');
-        return `<div class="tool-lines-wrap">${lines}</div>`;
+        // 折叠成一张"终端"卡：头部汇总，展开看明细（原生 details，重渲染不丢状态）
+        const total = toolCalls.length;
+        const running = toolCalls.filter(tc => tc.status === 'running');
+        const errored = toolCalls.filter(tc => tc.status === 'error' || tc.status === 'failed');
+        const allDone = running.length === 0;
+        const headName = (running[running.length - 1] || toolCalls[toolCalls.length - 1]).name;
+        let summary;
+        if (running.length) summary = `正在执行 ${running[running.length - 1].name}…`;
+        else if (errored.length) summary = `${total} 个工具 · ${errored.length} 失败`;
+        else summary = `使用 ${total} 个工具`;
+        const chev = '<svg class="tg-chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
+        return `
+      <details class="ch-tool-group${allDone ? '' : ' inflight'}"${allDone ? '' : ' open'}>
+        <summary class="ch-tool-group-head">
+          ${chev}
+          <span class="tg-icon">${getToolSvg(headName)}</span>
+          <span class="tg-label">${escapeHtml(summary)}</span>
+          ${allDone ? `<span class="tg-count">${total}</span>` : '<span class="tg-spinner"></span>'}
+        </summary>
+        <div class="ch-tool-group-body">${lines}</div>
+      </details>`;
     }
 
     /** DOM 直接更新思考行（流式阶段快速刷新，避免整页 re-render） */
