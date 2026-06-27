@@ -7034,6 +7034,61 @@ button.model-choice-item {
   background: linear-gradient(145deg, #E6B3C0, #CF8A9B) !important;
 }
 
+/* ── claude-dark 表单/输入框/弹窗 ──────────────────────────── */
+#chat-app-root[data-theme="claude-dark"] .chat-shell input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+#chat-app-root[data-theme="claude-dark"] .chat-shell textarea,
+#chat-app-root[data-theme="claude-dark"] .chat-shell select,
+#chat-app-root[data-theme="claude-dark"] .ai-input,
+#chat-app-root[data-theme="claude-dark"] .ai-textarea {
+  background: rgba(36, 33, 29, 0.95) !important;
+  color: var(--chat-ui-text) !important;
+  border-color: rgba(236, 230, 220, 0.14) !important;
+}
+#chat-app-root[data-theme="claude-dark"] .chat-shell input::placeholder,
+#chat-app-root[data-theme="claude-dark"] .chat-shell textarea::placeholder,
+#chat-app-root[data-theme="claude-dark"] .ai-input::placeholder,
+#chat-app-root[data-theme="claude-dark"] .ai-textarea::placeholder {
+  color: var(--chat-ui-muted) !important;
+}
+/* 新建联系人卡片 */
+#chat-app-root[data-theme="claude-dark"] .new-contact-card,
+#chat-app-root[data-theme="claude-dark"] .new-contact-field label {
+  color: var(--chat-ui-text) !important;
+}
+#chat-app-root[data-theme="claude-dark"] .new-contact-submit {
+  background: var(--chat-ui-send) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+/* 幕间/RP 弹窗 */
+#chat-app-root[data-theme="claude-dark"] .rp-room-dialog-card,
+#chat-app-root[data-theme="claude-dark"] .topic-confirm-card {
+  background: var(--chat-ui-surface-strong) !important;
+  border-color: var(--chat-ui-border) !important;
+  color: var(--chat-ui-text) !important;
+}
+#chat-app-root[data-theme="claude-dark"] .rp-room-dialog-card h4,
+#chat-app-root[data-theme="claude-dark"] .rp-room-dialog-card p,
+#chat-app-root[data-theme="claude-dark"] .rp-room-dialog-card label,
+#chat-app-root[data-theme="claude-dark"] .topic-confirm-card h4,
+#chat-app-root[data-theme="claude-dark"] .topic-confirm-card p {
+  color: var(--chat-ui-text) !important;
+}
+/* 入梦按钮（.bottom-tab.active.rp-room-dialog-btn）*/
+#chat-app-root[data-theme="claude-dark"] .rp-room-dialog-btn.bottom-tab.active,
+#chat-app-root[data-theme="claude-dark"] .rp-room-dialog-btn.prov-save-btn-main {
+  background: var(--chat-ui-send) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+/* 没有房间/空状态卡 */
+#chat-app-root[data-theme="claude-dark"] .empty-state-card,
+#chat-app-root[data-theme="claude-dark"] .chat-list-card {
+  background: var(--chat-ui-surface) !important;
+  border-color: var(--chat-ui-border) !important;
+  color: var(--chat-ui-muted) !important;
+}
+
 /* warm leftover lilac accents */
 #chat-app-root[data-theme="claude"] .btn-composer-submit {
   background: var(--chat-ui-send, #2A2521) !important;
