@@ -484,6 +484,7 @@
         let summary;
         if (running.length) summary = `正在执行 ${running[running.length - 1].name}…`;
         else if (errored.length) summary = `${total} 个工具 · ${errored.length} 失败`;
+        else if (total === 1) summary = `${headName} · 完成`;
         else summary = `使用 ${total} 个工具`;
         const chev = '<svg class="tg-chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
         return `
