@@ -7105,6 +7105,38 @@ button.model-choice-item {
   color: var(--chat-ui-text) !important;
 }
 
+/* dark shell body + settings page (stops white bleed-through / 重影) */
+#chat-app-root[data-theme="claude-dark"] .chat-shell {
+  background: #1C1A17 !important;
+}
+#chat-app-root[data-theme="claude-dark"] .chat-app-body,
+#chat-app-root[data-theme="claude-dark"] .settings-page,
+#chat-app-root[data-theme="claude-dark"] .page-block {
+  background: #1C1A17;
+  color: var(--chat-ui-text);
+}
+/* nav tab labels */
+#chat-app-root[data-theme="claude-dark"] .nav-tab-btn {
+  color: var(--chat-ui-muted);
+}
+/* setting rows + panels */
+#chat-app-root[data-theme="claude-dark"] .setting-row,
+#chat-app-root[data-theme="claude-dark"] .settings-group,
+#chat-app-root[data-theme="claude-dark"] .ai-panel {
+  color: var(--chat-ui-text);
+  background: var(--chat-ui-surface);
+  border-color: var(--chat-ui-border);
+}
+#chat-app-root[data-theme="claude-dark"] .setting-row > span,
+#chat-app-root[data-theme="claude-dark"] .setting-row > label,
+#chat-app-root[data-theme="claude-dark"] .nav-row-label,
+#chat-app-root[data-theme="claude-dark"] .chat-list-name,
+#chat-app-root[data-theme="claude-dark"] .chat-list-snippet,
+#chat-app-root[data-theme="claude-dark"] .settings-group h3,
+#chat-app-root[data-theme="claude-dark"] .section-eyebrow {
+  color: var(--chat-ui-text);
+}
+
 /* dark header + nav */
 #chat-app-root[data-theme="claude-dark"] .room-hero-inner,
 #chat-app-root[data-theme="claude-dark"] .chat-page-title { color: var(--chat-ui-text) !important; }
