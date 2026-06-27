@@ -7114,15 +7114,22 @@ button.model-choice-item {
 }
 #chat-app-root[data-theme="claude-dark"] .chat-app-body,
 #chat-app-root[data-theme="claude-dark"] .settings-page,
-#chat-app-root[data-theme="claude-dark"] .page-block {
+#chat-app-root[data-theme="claude-dark"] .page-block,
+#chat-app-root[data-theme="claude-dark"] .moments-page,
+#chat-app-root[data-theme="claude-dark"] .moments-feed-wrap,
+#chat-app-root[data-theme="claude-dark"] .white-canvas {
   background: #1C1A17;
   color: var(--chat-ui-text);
 }
-/* nav tab labels */
+/* nav tab labels + icons */
 #chat-app-root[data-theme="claude-dark"] .nav-tab-btn {
   color: var(--chat-ui-muted);
 }
-/* setting rows + panels */
+#chat-app-root[data-theme="claude-dark"] .nav-tab-icon svg {
+  stroke: currentColor;
+  fill: none;
+}
+/* setting rows + panels — 标签文字全补 */
 #chat-app-root[data-theme="claude-dark"] .setting-row,
 #chat-app-root[data-theme="claude-dark"] .settings-group,
 #chat-app-root[data-theme="claude-dark"] .ai-panel {
@@ -7130,14 +7137,34 @@ button.model-choice-item {
   background: var(--chat-ui-surface);
   border-color: var(--chat-ui-border);
 }
+#chat-app-root[data-theme="claude-dark"] .setting-copy,
+#chat-app-root[data-theme="claude-dark"] .setting-copy strong,
+#chat-app-root[data-theme="claude-dark"] .setting-copy p,
 #chat-app-root[data-theme="claude-dark"] .setting-row > span,
 #chat-app-root[data-theme="claude-dark"] .setting-row > label,
 #chat-app-root[data-theme="claude-dark"] .nav-row-label,
 #chat-app-root[data-theme="claude-dark"] .chat-list-name,
 #chat-app-root[data-theme="claude-dark"] .chat-list-snippet,
 #chat-app-root[data-theme="claude-dark"] .settings-group h3,
-#chat-app-root[data-theme="claude-dark"] .section-eyebrow {
+#chat-app-root[data-theme="claude-dark"] .section-eyebrow,
+#chat-app-root[data-theme="claude-dark"] .nav-row.setting-row .setting-copy strong,
+#chat-app-root[data-theme="claude-dark"] .nav-row.setting-row .setting-copy p {
+  color: var(--chat-ui-text) !important;
+}
+/* moments card */
+#chat-app-root[data-theme="claude-dark"] .moment-card {
+  background: var(--chat-ui-surface);
+  border-color: var(--chat-ui-border);
   color: var(--chat-ui-text);
+}
+#chat-app-root[data-theme="claude-dark"] .moment-body,
+#chat-app-root[data-theme="claude-dark"] .moment-author-name,
+#chat-app-root[data-theme="claude-dark"] .moment-text {
+  color: var(--chat-ui-text);
+}
+#chat-app-root[data-theme="claude-dark"] .moment-meta,
+#chat-app-root[data-theme="claude-dark"] .moment-time {
+  color: var(--chat-ui-muted);
 }
 
 /* dark header + nav */
