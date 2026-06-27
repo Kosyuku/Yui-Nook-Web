@@ -499,6 +499,38 @@
       </details>`;
     }
 
+    // ── 用量 pill（token 统计）────────────────────────────────────────────
+    // 后端契约：GET /api/usage → { items: [ { label, pct, used, limit, resetAt } ] }
+    //   label   显示名，如 "Claude Code · 5h" / "本月 API"
+    //   pct     0-100 已用百分比（必填，pill 取最满的那条）
+    //   used/limit/resetAt 可选，详情面板用
+    // 没有该接口时静默隐藏，不影响界面。等 Codex 接 usage_recorder + CC/Codex 额度。
+    let _usageData = null;       // null=未取 / []=无数据 / [..]=有
+    let _usageFetching = false;
+    async function fetchUsage() {
+        if (_usageFetching) return;
+        _usageFetching = true;
+        try {
+            const r = await fetch(`${API_BASE}/api/usage`);
+            const data = r.ok ? await r.json().catch(() => ({})) : {};
+            _usageData = Array.isArray(data.items) ? data.items : [];
+        } catch { _usageData = []; }
+        _usageFetching = false;
+        render();
+    }
+    function renderUsagePill() {
+        if (_usageData === null) { if (!_usageFetching) fetchUsage(); return ''; }
+        if (!_usageData.length) return '';
+        const top = _usageData.reduce((a, b) => (Number(b.pct) || 0) > (Number(a.pct) || 0) ? b : a);
+        const pct = Math.max(0, Math.min(100, Math.round(Number(top.pct) || 0)));
+        const level = pct >= 85 ? 'high' : pct >= 60 ? 'mid' : 'low';
+        return `
+          <button class="usage-pill ${level}" data-action="open-usage" type="button" aria-label="用量" title="${escapeHtml(top.label || '用量')}：${pct}%">
+            <span class="usage-pill-bar"><span class="usage-pill-fill" style="width:${pct}%"></span></span>
+            <span class="usage-pill-pct">${pct}%</span>
+          </button>`;
+    }
+
     /** DOM 直接更新思考行（流式阶段快速刷新，避免整页 re-render） */
     function patchThinkingLineDom(msgId, fullThinking, isDone) {
         const textEl = root()?.querySelector(`#tl-text-${msgId}`);
@@ -1675,6 +1707,7 @@
             </div>
           </div>
           <div class="room-actions">
+            ${renderUsagePill()}
             ${takeoverButton}
             <button class="icon-btn icon-circle" data-action="open-contact-settings" aria-label="\u8054\u7cfb\u4eba\u8bbe\u7f6e">${icon('settings')}</button>
           </div>

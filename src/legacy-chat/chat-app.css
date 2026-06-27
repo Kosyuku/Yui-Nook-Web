@@ -1412,6 +1412,32 @@
   border-top: 1px solid var(--chat-ui-border-soft, rgba(42, 37, 33, 0.06));
 }
 
+/* 用量 pill（token 统计）—— 借鉴 Prism usage bar，配色随主题 */
+.usage-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 9px 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--chat-ui-border, rgba(42, 37, 33, 0.10));
+  background: var(--chat-ui-surface-strong, rgba(255, 255, 255, 0.7));
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.usage-pill-bar {
+  width: 34px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--chat-ui-border, rgba(42, 37, 33, 0.10));
+  overflow: hidden;
+}
+.usage-pill-fill { display: block; height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+.usage-pill.low  .usage-pill-fill { background: linear-gradient(90deg, #6A8A5A, #8DB87A); }
+.usage-pill.mid  .usage-pill-fill { background: linear-gradient(90deg, #C4A44E, #DBB85C); }
+.usage-pill.high .usage-pill-fill { background: linear-gradient(90deg, #C4785E, #D98A6A); }
+.usage-pill-pct { font-size: 11px; font-weight: 600; color: var(--chat-ui-text, rgba(42, 37, 33, 0.85)); }
+
 .tool-lines-wrap {
   display: flex;
   flex-direction: column;
