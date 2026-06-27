@@ -907,6 +907,19 @@
   background: transparent;
 }
 
+/* themed code blocks (warm / dark) */
+#chat-app-root[data-theme="claude"] .message-text pre,
+#chat-app-root[data-theme="claude"] .message-text code {
+  background: rgba(42, 37, 33, 0.06);
+}
+#chat-app-root[data-theme="claude-dark"] .message-text pre,
+#chat-app-root[data-theme="claude-dark"] .message-text code {
+  background: rgba(0, 0, 0, 0.30);
+}
+#chat-app-root[data-theme="claude-dark"] .message-text pre code {
+  background: transparent;
+}
+
 .rp-action p,
 .rp-dialogue p {
   margin: 0;

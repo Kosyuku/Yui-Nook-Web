@@ -715,6 +715,7 @@
         let quote = [];
         let inFence = false;
         let fenceLines = [];
+        let fenceLang = '';
 
         const flushParagraph = () => {
             if (!paragraph.length) return;
@@ -741,13 +742,15 @@
         lines.forEach((line) => {
             if (/^\s*```/.test(line)) {
                 if (inFence) {
-                    html += `<pre><code>${escapeHtml(fenceLines.join('\n'))}</code></pre>`;
+                    html += renderCodeBlock(fenceLines.join('\n'), fenceLang);
                     fenceLines = [];
+                    fenceLang = '';
                     inFence = false;
                 } else {
                     flushBlocks();
                     inFence = true;
                     fenceLines = [];
+                    fenceLang = line.replace(/^\s*```/, '').trim();
                 }
                 return;
             }
@@ -781,9 +784,14 @@
             flushQuote();
             paragraph.push(line);
         });
-        if (inFence) html += `<pre><code>${escapeHtml(fenceLines.join('\n'))}</code></pre>`;
+        if (inFence) html += renderCodeBlock(fenceLines.join('\n'), fenceLang);
         flushBlocks();
         return sanitizeRenderedMessageHtml(html);
+    }
+
+    function renderCodeBlock(code, lang) {
+        // 消毒器只放行 pre/code，头部/复制按钮会被剥掉，所以代码块走纯 CSS 美化。
+        return `<pre><code>${escapeHtml(code)}</code></pre>`;
     }
 
     function renderMessageTextHtml(text = '') {
