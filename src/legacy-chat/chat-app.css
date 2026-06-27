@@ -7002,6 +7002,79 @@ button.model-choice-item {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   夜纸 · Claude dark — charcoal paper, cream text
+   ═══════════════════════════════════════════════════════════════ */
+
+#chat-app-root[data-theme="claude-dark"] {
+  --chat-ui-bg: linear-gradient(180deg, #23211E 0%, #1C1A17 100%);
+  --chat-ui-surface: rgba(45, 42, 38, 0.92);
+  --chat-ui-surface-strong: rgba(52, 48, 43, 0.98);
+  --chat-ui-border: rgba(236, 230, 220, 0.12);
+  --chat-ui-border-soft: rgba(236, 230, 220, 0.08);
+  --chat-ui-text: #ECE6DC;
+  --chat-ui-muted: rgba(236, 230, 220, 0.52);
+  --chat-ui-accent: #D99BAB;
+  --chat-ui-accent-soft: rgba(217, 155, 171, 0.20);
+  --chat-ui-ai-bubble: rgba(48, 45, 41, 0.96);
+  --chat-ui-user-bubble: rgba(74, 58, 62, 0.85);
+  --chat-ui-input: rgba(45, 42, 38, 0.96);
+  --chat-ui-send: #ECE6DC;
+  --chat-ui-shadow: 0 1px 2px rgba(0,0,0,0.25), 0 8px 22px -12px rgba(0,0,0,0.5);
+  --chat-ui-dot: rgba(236, 230, 220, 0.05);
+}
+
+#chat-app-root[data-theme="claude-dark"] .room-page {
+  background-image: radial-gradient(var(--chat-ui-dot) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+#chat-app-root[data-theme="claude-dark"] .message-bubble.from-ai {
+  background: var(--chat-ui-ai-bubble);
+  border: 1px solid var(--chat-ui-border);
+  color: var(--chat-ui-text);
+}
+#chat-app-root[data-theme="claude-dark"] .message-bubble.from-user {
+  background: var(--chat-ui-user-bubble);
+  border: 1px solid rgba(217, 155, 171, 0.28);
+  color: var(--chat-ui-text);
+}
+#chat-app-root[data-theme="claude-dark"] .message-text,
+#chat-app-root[data-theme="claude-dark"] .message-bubble {
+  color: var(--chat-ui-text);
+}
+#chat-app-root[data-theme="claude-dark"] .bubble-time { color: var(--chat-ui-muted); }
+#chat-app-root[data-theme="claude-dark"] .message-url { color: var(--chat-ui-accent); }
+
+/* dark composer — light send w/ dark arrow */
+#chat-app-root[data-theme="claude-dark"] .composer-zone {
+  background: linear-gradient(180deg, rgba(28,26,23,0), rgba(28,26,23,0.96) 32%);
+}
+#chat-app-root[data-theme="claude-dark"] .composer-input-wrap {
+  background: var(--chat-ui-input) !important;
+  border: 1px solid var(--chat-ui-border) !important;
+}
+#chat-app-root[data-theme="claude-dark"] .chat-input,
+#chat-app-root[data-theme="claude-dark"] .chat-input[contenteditable="true"] { color: var(--chat-ui-text); }
+#chat-app-root[data-theme="claude-dark"] .chat-input[data-empty="true"]::before { color: var(--chat-ui-muted); }
+#chat-app-root[data-theme="claude-dark"] .composer-card .send-round {
+  background: var(--chat-ui-send) !important;
+  color: #22201E !important;
+  border: none !important;
+}
+#chat-app-root[data-theme="claude-dark"] .composer-card .soft-mini {
+  background: var(--chat-ui-surface-strong) !important;
+  border: 1px solid var(--chat-ui-border) !important;
+  color: var(--chat-ui-text) !important;
+}
+
+/* dark header + nav */
+#chat-app-root[data-theme="claude-dark"] .room-hero-inner,
+#chat-app-root[data-theme="claude-dark"] .chat-page-title { color: var(--chat-ui-text) !important; }
+#chat-app-root[data-theme="claude-dark"] .nav-tab-btn.active { color: var(--chat-ui-accent) !important; }
+#chat-app-root[data-theme="claude-dark"] .switch-btn.on .switch-track {
+  background: linear-gradient(145deg, #C97E8E, #D99BAB) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
    窗台 · Windowsill theme — sage / clay / linen / botanical calm
    ═══════════════════════════════════════════════════════════════ */
 
