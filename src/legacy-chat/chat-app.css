@@ -7175,6 +7175,64 @@ button.model-choice-item {
   background: linear-gradient(145deg, #C97E8E, #D99BAB) !important;
 }
 
+/* ── 全局暗色：所有磨砂白玻璃按钮 → 暗色版 ─────────────────────── */
+#chat-app-root[data-theme="claude-dark"] .bottom-nav {
+  background: rgba(30, 27, 23, 0.95) !important;
+  border-color: rgba(236, 230, 220, 0.10) !important;
+  backdrop-filter: blur(20px);
+}
+#chat-app-root[data-theme="claude-dark"] .chat-shell .icon-circle,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .ghost-circle,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .soft-mini,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .bubble-mini-btn,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .cot-log-tool-btn,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .filter-btn,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .model-gear-btn,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .model-value-pill,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .ghost-action,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .bottom-tab,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .theme-choice-item,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .ai-chip,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .model-chip,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .qae-select-trigger,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .qae-select-option,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .prompt-reset-btn,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .prov-sync-btn,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .qae-btn-cancel {
+  background: rgba(45, 42, 38, 0.85) !important;
+  border-color: rgba(236, 230, 220, 0.12) !important;
+  color: var(--chat-ui-text) !important;
+  box-shadow: none !important;
+}
+/* active/selected 状态 */
+#chat-app-root[data-theme="claude-dark"] .chat-shell .bottom-tab.active,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .theme-choice-item.active,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .ai-chip.active,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .model-chip.active,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .cot-log-tool-btn.active,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .qae-select-option.active {
+  background: var(--chat-ui-accent-soft) !important;
+  border-color: rgba(217, 155, 171, 0.30) !important;
+  color: var(--chat-ui-accent) !important;
+}
+/* 保存/主操作 按钮 */
+#chat-app-root[data-theme="claude-dark"] .chat-shell .prompt-save-btn,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .prov-save-btn-main,
+#chat-app-root[data-theme="claude-dark"] .chat-shell .qae-btn-save {
+  background: var(--chat-ui-accent) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+}
+/* 新建/FAB 按钮 + 页面标题旁的 + 号 */
+#chat-app-root[data-theme="claude-dark"] .new-contact-fab,
+#chat-app-root[data-theme="claude-dark"] [data-action="new-contact"],
+#chat-app-root[data-theme="claude-dark"] [data-action="new-moment"] {
+  background: var(--chat-ui-surface-strong) !important;
+  border-color: rgba(236, 230, 220, 0.15) !important;
+  color: var(--chat-ui-text) !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3) !important;
+}
+
 /* profile card under claude themes */
 #chat-app-root[data-theme="claude"] .profile-card,
 #chat-app-root[data-theme="claude"] .profile-card.glass-frost {
