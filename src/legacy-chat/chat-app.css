@@ -6623,7 +6623,10 @@ button.model-choice-item {
 
 .profile-card {
   position: relative;
+  width: min(360px, 100%);
   max-width: 360px;
+  min-width: 0;
+  box-sizing: border-box;
   margin: 0 auto;
   padding: 22px 18px 18px !important;
   border-radius: 24px !important;
@@ -6637,7 +6640,7 @@ button.model-choice-item {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 50% 0%, rgba(227, 206, 250, 0.34), rgba(227, 206, 250, 0) 42%),
+    radial-gradient(circle at 50% 0%, var(--chat-ui-accent-soft, rgba(207,138,155,0.18)), transparent 42%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0));
   pointer-events: none;
 }
@@ -6760,8 +6763,8 @@ button.model-choice-item {
 
 .profile-action.primary {
   color: #fff;
-  border-color: rgba(142, 101, 214, 0.32);
-  background: linear-gradient(180deg, rgba(150, 113, 224, 0.96), rgba(124, 91, 202, 0.92));
+  border-color: rgba(42, 37, 33, 0.18);
+  background: var(--chat-ui-send, #2A2521);
 }
 
 @media (max-height: 640px) {
@@ -7143,6 +7146,54 @@ button.model-choice-item {
 #chat-app-root[data-theme="claude-dark"] .nav-tab-btn.active { color: var(--chat-ui-accent) !important; }
 #chat-app-root[data-theme="claude-dark"] .switch-btn.on .switch-track {
   background: linear-gradient(145deg, #C97E8E, #D99BAB) !important;
+}
+
+/* profile card under claude themes */
+#chat-app-root[data-theme="claude"] .profile-card,
+#chat-app-root[data-theme="claude"] .profile-card.glass-frost {
+  background: rgba(255, 253, 249, 0.96) !important;
+  border-color: rgba(42, 37, 33, 0.10) !important;
+  box-shadow: 0 10px 26px rgba(42, 37, 33, 0.08) !important;
+}
+#chat-app-root[data-theme="claude"] .profile-name { color: var(--chat-ui-text) !important; }
+#chat-app-root[data-theme="claude"] .profile-handle,
+#chat-app-root[data-theme="claude"] .profile-bio { color: var(--chat-ui-muted) !important; }
+
+#chat-app-root[data-theme="claude-dark"] .profile-card,
+#chat-app-root[data-theme="claude-dark"] .profile-card.glass-frost {
+  background: var(--chat-ui-surface) !important;
+  border-color: var(--chat-ui-border) !important;
+  box-shadow: var(--chat-ui-shadow) !important;
+}
+#chat-app-root[data-theme="claude-dark"] .profile-name { color: var(--chat-ui-text) !important; }
+#chat-app-root[data-theme="claude-dark"] .profile-handle,
+#chat-app-root[data-theme="claude-dark"] .profile-bio { color: var(--chat-ui-muted) !important; }
+#chat-app-root[data-theme="claude-dark"] .profile-info-item {
+  background: rgba(0,0,0,0.25);
+  border-color: var(--chat-ui-border-soft);
+}
+#chat-app-root[data-theme="claude-dark"] .profile-info-item span { color: var(--chat-ui-muted); }
+#chat-app-root[data-theme="claude-dark"] .profile-info-item strong { color: var(--chat-ui-text); }
+#chat-app-root[data-theme="claude-dark"] .profile-action {
+  background: var(--chat-ui-surface-strong);
+  border-color: var(--chat-ui-border);
+  color: var(--chat-ui-text);
+}
+
+/* COT log page under claude-dark */
+#chat-app-root[data-theme="claude-dark"] .cot-log-toolbar,
+#chat-app-root[data-theme="claude-dark"] .cot-log-card {
+  background: var(--chat-ui-surface) !important;
+  border-color: var(--chat-ui-border) !important;
+  box-shadow: none !important;
+  color: var(--chat-ui-text);
+}
+#chat-app-root[data-theme="claude-dark"] .cot-tab-btn {
+  color: var(--chat-ui-muted);
+}
+#chat-app-root[data-theme="claude-dark"] .cot-tab-btn.active {
+  background: var(--chat-ui-accent-soft) !important;
+  color: var(--chat-ui-accent) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════

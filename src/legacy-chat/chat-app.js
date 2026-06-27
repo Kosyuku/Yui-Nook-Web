@@ -5598,8 +5598,29 @@
         }
     }
 
+    // 系统日夜自动跟随：只在用户没显式选过完整主题时生效
+    const AUTO_THEME_KEY = 'murmur_auto_theme_v1';
+    function _applyAutoTheme() {
+        const current = state.globalSettings?.theme || '';
+        const hasExplicit = FULL_UI_THEMES.includes(current);
+        const userSet = (() => { try { return localStorage.getItem(AUTO_THEME_KEY) === '0'; } catch { return false; } })();
+        if (hasExplicit && userSet) return; // 用户手动选过，尊重选择
+        const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const target = dark ? 'claude-dark' : 'claude';
+        if (!state.globalSettings) state.globalSettings = {};
+        if (state.globalSettings.theme !== target) {
+            state.globalSettings.theme = target;
+            render();
+        }
+    }
+    // 监听系统主题变化
+    try {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', _applyAutoTheme);
+    } catch { /* old browser */ }
+
     document.addEventListener('DOMContentLoaded', () => {
         loadLocalSnapshot();
+        _applyAutoTheme(); // 初始化时根据系统应用主题
         openChatAppDefault();
         pullRemoteSnapshot().finally(async () => {
             await loadContactsFromAllSources();
@@ -10427,6 +10448,8 @@
 
         if (action === 'pick-theme-mode') {
             state.globalSettings.theme = target.dataset.theme || state.globalSettings.theme;
+            // 用户显式选择主题，标记不再自动覆盖
+            try { localStorage.setItem(AUTO_THEME_KEY, '0'); } catch { /* ignore */ }
             render();
             saveAiSettings();
             return;
