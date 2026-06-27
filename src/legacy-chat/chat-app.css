@@ -1,12 +1,14 @@
 .chat-shell {
   position: relative;
-  height: 100%;
-  min-height: 0;
-  width: 100%;
+  height: 100vh;
+  min-height: 100vh;
+  max-height: 100vh;
+  width: 100vw;
   max-width: 100vw;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: #faf8f4;
   color: #333;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
@@ -155,7 +157,7 @@
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 8px 16px 24px;
+  padding: 8px 16px calc(24px + env(safe-area-inset-bottom, 0px));
 }
 
 /* In room mode, the body must NOT scroll — messages-panel handles scrolling */
@@ -546,7 +548,7 @@
 }
 
 .messages-panel {
-  padding: 10px 12px 12px;
+  padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1426,7 +1428,7 @@
 .composer-zone {
   flex-shrink: 0;
   flex: 0 0 auto;
-  padding: 8px 12px calc(env(safe-area-inset-bottom) + 10px);
+  padding: 8px 12px calc(10px + env(safe-area-inset-bottom, 0px));
   background: linear-gradient(180deg, rgba(250,248,244,0), rgba(250,248,244,.96) 32%);
   z-index: 20;
 }
