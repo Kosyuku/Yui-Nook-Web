@@ -196,6 +196,7 @@
         currentRpMessages: [],
         conversations: {},
         rpMessages: {},
+        usageSheetOpen: false,
         rpRoomDialogOpen: false,
         rpRoomDialogMode: 'create',
         rpRoomForm: {
@@ -518,17 +519,87 @@
         _usageFetching = false;
         render();
     }
+    /** 1234567 -> "1.2M"；用量数字要短，pill 塞在标题栏里 */
+    function formatTokenCount(n) {
+        const v = Number(n) || 0;
+        if (v >= 1e9) return (v / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
+        if (v >= 1e6) return (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+        if (v >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
+        return String(Math.round(v));
+    }
     function renderUsagePill() {
         if (_usageData === null) { if (!_usageFetching) fetchUsage(); return ''; }
         if (!_usageData.length) return '';
-        const top = _usageData.reduce((a, b) => (Number(b.pct) || 0) > (Number(a.pct) || 0) ? b : a);
+
+        // 有百分比的优先（说明标定过额度上限），否则退而取用量最大的那条
+        const withPct = _usageData.filter(i => (Number(i.pct) || 0) > 0);
+        const pool = withPct.length ? withPct : _usageData;
+        const key = withPct.length ? 'pct' : 'used';
+        const top = pool.reduce((a, b) => (Number(b[key]) || 0) > (Number(a[key]) || 0) ? b : a);
+        const label = escapeHtml(top.label || '用量');
+
+        // 没标定上限时没有分母，显示 token 数而不是一个永远 0% 的空进度条
+        if (!withPct.length) {
+            const used = Number(top.used) || 0;
+            if (!used) return '';
+            return `
+          <button class="usage-pill low nolimit" data-action="open-usage" type="button" aria-label="用量" title="${label}：${used.toLocaleString()} tokens">
+            <span class="usage-pill-pct">${formatTokenCount(used)}</span>
+          </button>`;
+        }
+
         const pct = Math.max(0, Math.min(100, Math.round(Number(top.pct) || 0)));
         const level = pct >= 85 ? 'high' : pct >= 60 ? 'mid' : 'low';
         return `
-          <button class="usage-pill ${level}" data-action="open-usage" type="button" aria-label="用量" title="${escapeHtml(top.label || '用量')}：${pct}%">
+          <button class="usage-pill ${level}" data-action="open-usage" type="button" aria-label="用量" title="${label}：${pct}%">
             <span class="usage-pill-bar"><span class="usage-pill-fill" style="width:${pct}%"></span></span>
             <span class="usage-pill-pct">${pct}%</span>
           </button>`;
+    }
+
+    /** 点 pill 弹出的用量详情。复用朋友圈评论弹层那套 sheet 样式，不新增 CSS。 */
+    function renderUsageSheet() {
+        const items = _usageData || [];
+        const rows = items.map(item => {
+            const pct = Math.max(0, Math.min(100, Math.round(Number(item.pct) || 0)));
+            const used = Number(item.used) || 0;
+            const limit = Number(item.limit) || 0;
+            const level = pct >= 85 ? 'high' : pct >= 60 ? 'mid' : 'low';
+            // 有上限就显示进度条，没有就只报用量（见 renderUsagePill 同款逻辑）
+            const right = limit
+                ? `${pct}%`
+                : (used ? formatTokenCount(used) : '—');
+            const bar = limit
+                ? `<span class="usage-pill-bar" style="width:100%"><span class="usage-pill-fill" style="width:${pct}%"></span></span>`
+                : '';
+            const detail = limit
+                ? `${used.toLocaleString()} / ${limit.toLocaleString()}`
+                : (used ? `${used.toLocaleString()} tokens` : '');
+            return `
+              <div class="sheet-comment usage-pill ${level}" style="display:block;width:100%;height:auto;padding:10px 12px;margin-bottom:8px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                  <strong style="font-size:13px;">${escapeHtml(item.label || '')}</strong>
+                  <span class="usage-pill-pct">${right}</span>
+                </div>
+                ${bar}
+                ${detail ? `<div style="font-size:11px;opacity:.7;margin-top:4px;">${escapeHtml(detail)}</div>` : ''}
+                ${item.source ? `<div style="font-size:10px;opacity:.5;margin-top:2px;">来源：${escapeHtml(item.source)}</div>` : ''}
+              </div>`;
+        }).join('');
+
+        return `
+      <div class="sheet-overlay" data-action="close-usage">
+        <div class="comment-sheet" data-action="noop">
+          <div class="sheet-handle"></div>
+          <div class="sheet-head">
+            <strong>用量</strong>
+            <button class="icon-btn" data-action="close-usage" type="button" aria-label="关闭">✕</button>
+          </div>
+          <div class="sheet-comments">
+            ${rows || '<div style="opacity:.6;font-size:13px;padding:8px 0;">暂无用量数据</div>'}
+          </div>
+        </div>
+      </div>`;
     }
 
     /** DOM 直接更新思考行（流式阶段快速刷新，避免整页 re-render） */
@@ -1341,6 +1412,7 @@
         ${state.topicConfirmOpen ? renderTopicConfirmDialog() : ''}
         ${state.rpRoomDialogOpen ? renderRpRoomDialog() : ''}
         ${state.avatarCropper ? renderAvatarCropperDialog() : ''}
+        ${state.usageSheetOpen ? renderUsageSheet() : ''}
       </div>
     `;
         bind();
@@ -4643,6 +4715,24 @@
             state.currentTab = target.dataset.tab;
             state.currentView = target.dataset.tab === 'chats' ? 'list' : target.dataset.tab;
             render();
+        }
+
+        if (action === 'open-usage') {
+            _usageData = null;          // 重新拉一次，别看旧数
+            state.usageSheetOpen = true;
+            render();
+            return;
+        }
+
+        if (action === 'close-usage') {
+            state.usageSheetOpen = false;
+            render();
+            return;
+        }
+
+        if (action === 'noop') {
+            event.stopPropagation();    // 点弹层内部不要穿透到遮罩关闭
+            return;
         }
 
         if (action === 'open-contact') {
