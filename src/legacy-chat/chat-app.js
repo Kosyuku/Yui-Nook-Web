@@ -12,7 +12,7 @@
             unread: 2,
             pinned: true,
             avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300&q=80',
-            theme: 'cream',
+            theme: 'rose',
             settings: {
                 model: 'gpt-5.4',
                 modelProviderId: 'openai',
@@ -244,15 +244,8 @@
         quickActionDropDirection: '',
         contactPersonaExpanded: false,
         contactModelAdvancedOpen: false,
-        chatInputDraft: '',
-        chatInputHeight: 0,
-        chatInputSelection: null,
-        chatInputFocused: false,
         chatAttachments: [],
         chatPasteError: '',
-        contactSyncAuthoritative: false,
-        deletedContactIds: [],
-        restoredContactIds: [],
         companionState: {
             recent_topics: [],
             current_mood: '',
@@ -289,13 +282,13 @@
         .replaceAll("'", '&#39;');
 
     const CHAT_UI_THEMES = [
-        { key: 'default', name: '奶油', desc: '奶油暖白的默认气泡', roomTheme: 'cream', aliases: ['默认玫瑰', '默认', '默认主题', 'rose'] },
+        { key: 'default', name: '默认主题', desc: '干净柔和的默认聊天界面', roomTheme: 'rose', aliases: ['默认玫瑰', '默认'] },
         { key: 'pink', name: '蜜桃粉', desc: '更甜一点的粉色聊天氛围', roomTheme: 'rose', aliases: ['奶茶'] },
         { key: 'dark', name: '夜色', desc: '低亮度深色聊天界面', roomTheme: 'rose', aliases: [] },
         { key: 'glass', name: '玻璃雾', desc: '通透轻雾感的玻璃界面', roomTheme: 'mist', aliases: ['晴空'] },
     ];
     // Full-UI themes live in global settings (themeSettings), not per-contact
-    const FULL_UI_THEMES = ['claude', 'claude-dark', 'windowsill', 'tape'];
+    const FULL_UI_THEMES = ['windowsill', 'tape'];
 
     function normalizeChatThemeKey(value) {
         const raw = String(value || '').trim();
@@ -386,16 +379,8 @@
     function patchStreamingMessageDom(msgId, fullText, fullThinking) {
         const row = root()?.querySelector(`.message-row[data-msg-id="${msgId}"]`);
         if (!row) return;
-        const bubble = row.querySelector('.message-bubble');
-        let msgEl = row.querySelector('.message-text');
-        if (!msgEl && bubble && fullText) {
-            bubble.querySelector('.typing-dots')?.remove();
-            bubble.classList.remove('message-awaiting-text');
-            msgEl = document.createElement('div');
-            msgEl.className = 'message-text';
-            bubble.appendChild(msgEl);
-        }
-        if (msgEl) msgEl.innerHTML = renderMessageTextHtml(normalizeBubbleText(fullText));
+        const msgEl = row.querySelector('.message-text');
+        if (msgEl) msgEl.textContent = fullText;
         if (fullThinking) {
             // New v2 thinking-line DOM
             patchThinkingLineDom(msgId, fullThinking, false);
@@ -464,10 +449,8 @@
     function renderToolLines(toolCalls = []) {
         if (!toolCalls.length) return '';
         const lines = toolCalls.map(tc => {
-            const isError = tc.status === 'error' || tc.status === 'failed';
-            const tlState = tc.status === 'running' ? 'tl-active' : isError ? 'tl-error' : 'tl-done';
-            const statusLabel = tc.status === 'running' ? '调用中…' : isError ? '失败' : '完成';
-            const label = `${tc.name} → ${statusLabel}`;
+            const tlState = tc.status === 'running' ? 'tl-active' : 'tl-done';
+            const label = `${tc.name} → ${tc.status === 'running' ? '调用中…' : '完成'}`;
             return `
           <div class="tool-line ${tlState}">
             <div class="tool-dot"></div>
@@ -475,60 +458,7 @@
             <span class="tool-text">${escapeHtml(label)}</span>
           </div>`;
         }).join('');
-        // 折叠成一张"终端"卡：头部汇总，展开看明细（原生 details，重渲染不丢状态）
-        const total = toolCalls.length;
-        const running = toolCalls.filter(tc => tc.status === 'running');
-        const errored = toolCalls.filter(tc => tc.status === 'error' || tc.status === 'failed');
-        const allDone = running.length === 0;
-        const headName = (running[running.length - 1] || toolCalls[toolCalls.length - 1]).name;
-        let summary;
-        if (running.length) summary = `正在执行 ${running[running.length - 1].name}…`;
-        else if (errored.length) summary = `${total} 个工具 · ${errored.length} 失败`;
-        else if (total === 1) summary = `${headName} · 完成`;
-        else summary = `使用 ${total} 个工具`;
-        const chev = '<svg class="tg-chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
-        return `
-      <details class="ch-tool-group${allDone ? '' : ' inflight'}"${allDone ? '' : ' open'}>
-        <summary class="ch-tool-group-head">
-          ${chev}
-          <span class="tg-icon">${getToolSvg(headName)}</span>
-          <span class="tg-label">${escapeHtml(summary)}</span>
-          ${allDone ? `<span class="tg-count">${total}</span>` : '<span class="tg-spinner"></span>'}
-        </summary>
-        <div class="ch-tool-group-body">${lines}</div>
-      </details>`;
-    }
-
-    // ── 用量 pill（token 统计）────────────────────────────────────────────
-    // 后端契约：GET /api/usage → { items: [ { label, pct, used, limit, resetAt } ] }
-    //   label   显示名，如 "Claude Code · 5h" / "本月 API"
-    //   pct     0-100 已用百分比（必填，pill 取最满的那条）
-    //   used/limit/resetAt 可选，详情面板用
-    // 没有该接口时静默隐藏，不影响界面。等 Codex 接 usage_recorder + CC/Codex 额度。
-    let _usageData = null;       // null=未取 / []=无数据 / [..]=有
-    let _usageFetching = false;
-    async function fetchUsage() {
-        if (_usageFetching) return;
-        _usageFetching = true;
-        try {
-            const r = await fetch(`${API_BASE}/api/usage`);
-            const data = r.ok ? await r.json().catch(() => ({})) : {};
-            _usageData = Array.isArray(data.items) ? data.items : [];
-        } catch { _usageData = []; }
-        _usageFetching = false;
-        render();
-    }
-    function renderUsagePill() {
-        if (_usageData === null) { if (!_usageFetching) fetchUsage(); return ''; }
-        if (!_usageData.length) return '';
-        const top = _usageData.reduce((a, b) => (Number(b.pct) || 0) > (Number(a.pct) || 0) ? b : a);
-        const pct = Math.max(0, Math.min(100, Math.round(Number(top.pct) || 0)));
-        const level = pct >= 85 ? 'high' : pct >= 60 ? 'mid' : 'low';
-        return `
-          <button class="usage-pill ${level}" data-action="open-usage" type="button" aria-label="用量" title="${escapeHtml(top.label || '用量')}：${pct}%">
-            <span class="usage-pill-bar"><span class="usage-pill-fill" style="width:${pct}%"></span></span>
-            <span class="usage-pill-pct">${pct}%</span>
-          </button>`;
+        return `<div class="tool-lines-wrap">${lines}</div>`;
     }
 
     /** DOM 直接更新思考行（流式阶段快速刷新，避免整页 re-render） */
@@ -555,85 +485,16 @@
     const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
     const wait = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
-    const INLINE_REASONING_MARKERS = [
-        '我需要', '我应该', '我会', '让我', '用户', '上下文', '系统提示', '当前',
-        '小酒说', '她说', '语气里', '回应我之前', '回想一下', '最近的对话历史',
-        '接受了现状', '不需要长篇大论', '我该怎么回应', '我应该怎么回应',
-        '首先', '然后', '可能是', '也就是说', '尾音', '情绪', '撒娇',
-        'the user', 'i need', 'i should', 'let me',
-    ];
-    const INLINE_REPLY_CUES = [
-        '好', '嗯', '行', '来了', '收到', '听你的', '别急', '放心', '可以',
-        '我能', '我会', '现在我', '不过你放心', '你放心',
-    ];
-
-    function inlineReasoningHitCount(text) {
-        const normalized = String(text || '').toLowerCase();
-        return INLINE_REASONING_MARKERS.reduce((count, marker) => (
-            normalized.includes(marker.toLowerCase()) ? count + 1 : count
-        ), 0);
-    }
-
-    function startsLikeVisibleReply(text) {
-        const stripped = String(text || '').trim().replace(/^[（(][^）)]{0,36}[）)]\s*/u, '');
-        return INLINE_REPLY_CUES.some((cue) => stripped.startsWith(cue));
-    }
-
-    function splitInlineReasoningReply(text, { final = false } = {}) {
-        const raw = String(text || '').replace(/\r\n/g, '\n').trim();
-        if (!raw) return { visible: '', thinking: '' };
-        const paragraphs = raw.split(/\n\s*\n+/).map((part) => part.trim()).filter(Boolean);
-        if (paragraphs.length > 1) {
-            const removed = [];
-            let firstVisible = 0;
-            for (let i = 0; i < paragraphs.length; i += 1) {
-                const paragraph = paragraphs[i];
-                const hits = inlineReasoningHitCount(paragraph);
-                const looksMeta = hits >= 2 || (i === 0 && hits >= 1 && paragraph.length >= 48);
-                if (looksMeta && !startsLikeVisibleReply(paragraph)) {
-                    removed.push(paragraph);
-                    firstVisible = i + 1;
-                    continue;
-                }
-                break;
-            }
-            const visible = paragraphs.slice(firstVisible).join('\n\n').trim();
-            if (removed.length && visible) {
-                return { visible, thinking: removed.join('\n\n') };
-            }
-        }
-        const hits = inlineReasoningHitCount(raw);
-        if (hits >= 3 && !startsLikeVisibleReply(raw)) {
-            return { visible: '', thinking: raw };
-        }
-        return { visible: raw, thinking: '' };
-    }
-
-    function joinThinkingParts(...parts) {
-        return parts.map((part) => cleanThinkingText(part)).filter(Boolean).join('\n\n');
-    }
-
     function splitAssistantReply(text) {
         const raw = String(text || '').replace(/\r\n/g, '\n').trim();
         if (!raw) return [];
         const normalized = raw
             .replace(/[ \t]+\n/g, '\n')
             .replace(/\n{3,}/g, '\n\n');
-        const lines = normalized.split('\n').map((line) => line.trim()).filter(Boolean);
-        const codeLikeLines = lines.filter((line) => /^`[^`]+`$/u.test(line) || /^[-*]\s+`[^`]+`$/u.test(line));
-        if (lines.length >= 3 && codeLikeLines.length >= 2) {
-            return [normalized];
-        }
-        let paragraphs = normalized
+        const paragraphs = normalized
             .split(/\n{2,}/)
             .map((part) => String(part || '').trim())
             .filter(Boolean);
-        if (paragraphs.length <= 1 && /\n/.test(normalized)) {
-            paragraphs = normalized
-                .split(/\n+/)
-                .map((part) => String(part || '').trim())
-                .filter(Boolean);
-        }
         const chunks = [];
         const pushChunk = (part) => {
             const cleaned = String(part || '').trim();
@@ -656,7 +517,7 @@
             let bucket = '';
             sentences.forEach((sentence) => {
                 const next = bucket ? `${bucket}${sentence}` : sentence;
-                if (bucket && next.length > 72) {
+                if (bucket && next.length > 90) {
                     pushChunk(bucket);
                     bucket = sentence;
                 } else {
@@ -667,7 +528,7 @@
         };
         paragraphs.forEach((part) => {
             const canSplit = /[。！？!?…]\s*/u.test(part);
-            if (part.length <= 48 || !canSplit) {
+            if (part.length <= 64 || !canSplit) {
                 pushChunk(part);
             } else {
                 splitLongParagraph(part);
@@ -689,145 +550,6 @@
                 return lines.join('\n');
             })
             .join('\n\n');
-    }
-
-    function sanitizeRenderedMessageHtml(html = '') {
-        const allowedTags = new Set(['P', 'BR', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'STRONG', 'EM', 'CODE', 'PRE', 'SPAN']);
-        const allowedClasses = new Set(['message-url', 'rp-action', 'rp-dialogue']);
-        const template = document.createElement('template');
-        template.innerHTML = String(html || '');
-        const cleanNode = (node) => {
-            if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent || '');
-            if (node.nodeType !== Node.ELEMENT_NODE) return document.createTextNode('');
-            const tag = node.tagName;
-            const fragment = document.createDocumentFragment();
-            Array.from(node.childNodes).forEach((child) => fragment.appendChild(cleanNode(child)));
-            if (!allowedTags.has(tag)) return fragment;
-            const out = document.createElement(tag.toLowerCase());
-            if (tag === 'SPAN') {
-                const kept = String(node.getAttribute('class') || '')
-                    .split(/\s+/)
-                    .filter((cls) => allowedClasses.has(cls));
-                if (kept.length) out.setAttribute('class', kept.join(' '));
-            }
-            out.appendChild(fragment);
-            return out;
-        };
-        const out = document.createElement('div');
-        Array.from(template.content.childNodes).forEach((node) => out.appendChild(cleanNode(node)));
-        return out.innerHTML;
-    }
-
-    function renderInlineMarkdown(text = '') {
-        const codeParts = [];
-        const stashCode = (_match, code) => {
-            const token = `\u0000CODE${codeParts.length}\u0000`;
-            codeParts.push(`<code>${escapeHtml(code)}</code>`);
-            return token;
-        };
-        let html = String(text || '').replace(/`([^`\n]+)`/g, stashCode);
-        html = escapeHtml(html)
-            .replace(/\*\*([^*\n]+(?:[\s\S]*?[^*\n])?)\*\*/g, '<strong>$1</strong>')
-            .replace(/__([^_\n]+(?:[\s\S]*?[^_\n])?)__/g, '<strong>$1</strong>')
-            .replace(/(^|[^\*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
-            .replace(/(^|[^_])_([^_\n]+)_/g, '$1<em>$2</em>')
-            .replace(/https?:\/\/[^\s<>"']+/g, '<span class="message-url">$&</span>');
-        codeParts.forEach((code, index) => {
-            html = html.replaceAll(escapeHtml(`\u0000CODE${index}\u0000`), code);
-        });
-        return html;
-    }
-
-    function renderMarkdownToHtml(text = '') {
-        const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
-        let html = '';
-        let paragraph = [];
-        let listType = '';
-        let listItems = [];
-        let quote = [];
-        let inFence = false;
-        let fenceLines = [];
-        let fenceLang = '';
-
-        const flushParagraph = () => {
-            if (!paragraph.length) return;
-            html += `<p>${paragraph.map(renderInlineMarkdown).join('<br>')}</p>`;
-            paragraph = [];
-        };
-        const flushList = () => {
-            if (!listItems.length || !listType) return;
-            html += `<${listType}>${listItems.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join('')}</${listType}>`;
-            listType = '';
-            listItems = [];
-        };
-        const flushQuote = () => {
-            if (!quote.length) return;
-            html += `<blockquote>${quote.map(renderInlineMarkdown).join('<br>')}</blockquote>`;
-            quote = [];
-        };
-        const flushBlocks = () => {
-            flushParagraph();
-            flushList();
-            flushQuote();
-        };
-
-        lines.forEach((line) => {
-            if (/^\s*```/.test(line)) {
-                if (inFence) {
-                    html += renderCodeBlock(fenceLines.join('\n'), fenceLang);
-                    fenceLines = [];
-                    fenceLang = '';
-                    inFence = false;
-                } else {
-                    flushBlocks();
-                    inFence = true;
-                    fenceLines = [];
-                    fenceLang = line.replace(/^\s*```/, '').trim();
-                }
-                return;
-            }
-            if (inFence) {
-                fenceLines.push(line);
-                return;
-            }
-            if (!line.trim()) {
-                flushBlocks();
-                return;
-            }
-            const unordered = line.match(/^\s*[-*+]\s+(.+)$/);
-            const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
-            const quoted = line.match(/^\s*>\s?(.*)$/);
-            if (unordered || ordered) {
-                flushParagraph();
-                flushQuote();
-                const nextType = ordered ? 'ol' : 'ul';
-                if (listType && listType !== nextType) flushList();
-                listType = nextType;
-                listItems.push((unordered || ordered)[1]);
-                return;
-            }
-            if (quoted) {
-                flushParagraph();
-                flushList();
-                quote.push(quoted[1]);
-                return;
-            }
-            flushList();
-            flushQuote();
-            paragraph.push(line);
-        });
-        if (inFence) html += renderCodeBlock(fenceLines.join('\n'), fenceLang);
-        flushBlocks();
-        return sanitizeRenderedMessageHtml(html);
-    }
-
-    function renderCodeBlock(code, lang) {
-        // 消毒器只放行 pre/code，头部/复制按钮会被剥掉，所以代码块走纯 CSS 美化。
-        return `<pre><code>${escapeHtml(code)}</code></pre>`;
-    }
-
-    function renderMessageTextHtml(text = '') {
-        return renderMarkdownToHtml(text);
     }
 
     function assistantChunkDelay(text) {
@@ -855,15 +577,12 @@
         for (let i = 0; i < list.length; i += 1) {
             if (state.assistantPlayback.token !== token) return;
             const msg = {
-                id: options.baseId ? `${options.baseId}__part_${i}` : `ai_chunk_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`,
+                id: `ai_chunk_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`,
                 role: 'ai',
                 text: list[i],
                 content: list[i],
                 time: nowTimeStr(),
                 created_at: new Date().toISOString(),
-                ...(options.agentId ? { agent_id: options.agentId } : {}),
-                ...(options.source ? { source: options.source } : {}),
-                ...(options.provider ? { provider: options.provider } : {}),
             };
             if (i === 0) {
                 if (options.thinking) msg.thinking = options.thinking;
@@ -893,11 +612,6 @@
         if (state.assistantPlayback.token === token) {
             state.assistantPlayback.token = '';
             state.assistantPlayback.timer = null;
-        }
-        const finalPreview = String(options.fullText || list.join('\n\n')).trim();
-        if (finalPreview) {
-            contact.lastMessage = finalPreview;
-            contact.lastTime = nowTimeStr();
         }
         queueLocalSyncIfChanged(120);
     }
@@ -1204,14 +918,12 @@
             heartFilled: `<svg viewBox="0 0 24 24" fill="#B595C9" stroke="none" stroke-width="0"><path d="M12 20.5s-7-4.4-7-10a4 4 0 017-2.5A4 4 0 0119 10.5c0 5.6-7 10-7 10z"/></svg>`,
             comment: `<svg ${common}><path d="M7 18l-3 2 1-3.8A7.8 7.8 0 014.2 13 7.8 7.8 0 1112 20a8 8 0 01-5-2z"/><path d="M8.5 10.5h7M8.5 13.5h4.5"/></svg>`,
             chatArrow: `<svg ${common}><path d="M4.8 18.2l.9-3.3A7.5 7.5 0 014.5 11 7.5 7.5 0 1112 18.5a7.4 7.4 0 01-3.6-.9z"/><path d="M10 9l4 3-4 3"/><path d="M14 12H8"/></svg>`,
-            send: `<svg ${common}><path d="M12 19V5"/><path d="M5.5 11.5L12 5l6.5 6.5"/></svg>`,
+            send: `<svg ${common}><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg>`,
             close: `<svg ${common}><path d="M18 6L6 18M6 6l12 12"/></svg>`,
             camera: `<svg ${common}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>`,
-            attach: `<svg ${common}><path d="M12 5v14M5 12h14"/></svg>`,
+            attach: `<svg ${common}><path d="M21 11.5l-8.7 8.7a5 5 0 01-7.1-7.1l9.2-9.2a3.5 3.5 0 015 5L9 19.3a2 2 0 01-2.8-2.8l8.5-8.5"/></svg>`,
             quote: `<svg ${common}><path d="M9 7H5v5h4v5H4v-5c0-2.8 1.8-5 5-5zM20 7h-4v5h4v5h-5v-5c0-2.8 1.8-5 5-5z"/></svg>`,
-            copy: `<svg ${common}><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 012-2h10"/></svg>`,
             reroll: `<svg ${common}><path d="M20 11a8 8 0 10-2.3 5.7"/><path d="M20 4v7h-7"/></svg>`,
-            speaker: `<svg ${common}><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>`,
             cot: `<svg ${common}><path d="M12 4v16M4 12h16"/><path d="M7.5 7.5l9 9M16.5 7.5l-9 9" opacity="0.18"/></svg>`,
             bubbleHeart: `<svg ${common}><path d="M12 19.3s-5.8-3.5-5.8-8a3.7 3.7 0 016.1-2.8 3.7 3.7 0 015.9 2.8c0 4.5-5.6 8-5.6 8z"/></svg>`,
             weather: `<svg ${common}><path d="M6 16a4 4 0 010-8 5.5 5.5 0 0110.4-1.8A4 4 0 1118 16H6z"/></svg>`,
@@ -1321,7 +1033,6 @@
         // Preserve scroll position of the moments/list body before re-render
         const body = mount.querySelector('.chat-app-body');
         const savedScroll = body ? body.scrollTop : 0;
-        const chatInputSnapshot = ['room', 'rpRoom'].includes(state.currentView) ? captureChatInputState() : null;
         const activeContact = byId(state.currentContactId) || state.contacts[0];
         const chatThemeKey = getContactChatThemeKey(activeContact);
         const _globalTheme = state.globalSettings?.theme || '';
@@ -1344,8 +1055,6 @@
       </div>
     `;
         bind();
-        const restoredInput = mount.querySelector('.chat-input');
-        if (restoredInput && chatInputSnapshot) restoreChatInputState(restoredInput, chatInputSnapshot);
         scrollToBottom();
         ensureRoomHistoryLoaded(activeContact);
         if (!['room', 'rpRoom'].includes(state.currentView)) {
@@ -1633,7 +1342,6 @@
         if (state.currentView === 'room') return renderRoomHeader();
         if (state.currentView === 'rpRoom') return renderRpRoomHeader();
         if (state.currentView === 'contactSettings') return renderSimpleHeader('\u8054\u7cfb\u4eba\u8bbe\u7f6e', 'back-room', true);
-        if (state.currentView === 'contactPersonaEditor') return renderSimpleHeader('\u89d2\u8272\u8bbe\u5b9a', 'back-contact-settings', true);
         if (state.currentView === 'cotLog') return renderSimpleHeader('COT \u65e5\u5fd7', 'back-contact-settings', true);
         if (state.currentView === 'rpLobby') {
             return `
@@ -1707,7 +1415,6 @@
             </div>
           </div>
           <div class="room-actions">
-            ${renderUsagePill()}
             ${takeoverButton}
             <button class="icon-btn icon-circle" data-action="open-contact-settings" aria-label="\u8054\u7cfb\u4eba\u8bbe\u7f6e">${icon('settings')}</button>
           </div>
@@ -1739,7 +1446,6 @@
         if (state.currentView === 'moments') return renderMoments();
         if (state.currentView === 'settings') return renderGlobalSettings();
         if (state.currentView === 'contactSettings') return renderContactSettingsV2();
-        if (state.currentView === 'contactPersonaEditor') return renderContactPersonaEditor();
         if (state.currentView === 'cotLog') return renderCotLogPage();
         if (state.currentView === 'companionStateDetail') return renderCompanionStateDetail();
         if (state.currentView === 'contactImpressionDetail') return renderContactInsightDetail('\u5173\u4e8e\u4f60\u7684\u5370\u8c61', 'impression', state.companionState.impression);
@@ -1843,7 +1549,6 @@
         const normalizedId = String(contactId || '').trim();
         if (!normalizedId) return;
 
-        rememberDeletedContactId(normalizedId);
         cancelAssistantPlayback?.('contact-deleted');
         if (state.streamingAbortController && state.currentContactId === normalizedId) {
             state.streamingAbortController.abort();
@@ -1854,7 +1559,7 @@
             agentPersonaSaveTimers.delete(normalizedId);
         }
 
-        state.contacts = state.contacts.filter((item) => normalizeContactIdValue(item.id) !== normalizeContactIdValue(normalizedId));
+        state.contacts = state.contacts.filter((item) => item.id !== normalizedId);
         state.activeBubbleToolsId = null;
         state.quoteMomentId = null;
         state.quoteMessageId = null;
@@ -1879,8 +1584,7 @@
         }
 
         const chatInput = root()?.querySelector('.chat-input');
-        if (chatInput) setChatInputText(chatInput, '');
-        resetChatInputDraftState();
+        if (chatInput) chatInput.value = '';
     }
 
     async function deleteContactSafe(contactId) {
@@ -1945,27 +1649,6 @@
         return canToggleCCForContact(contact) && !!contact?.settings?.ccEnabled;
     }
 
-    const DEFAULT_CONTACT_AVATAR = 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&q=80';
-
-    function isDefaultContactAvatar(value) {
-        return !value || String(value) === DEFAULT_CONTACT_AVATAR;
-    }
-
-    function isAgentProfileContact(contact = {}) {
-        return String(contact.profileSource || contact._profileSource || '').toLowerCase() === 'agent';
-    }
-
-    function contactProfileField(existing, incoming, key) {
-        if (isAgentProfileContact(incoming) && incoming[key]) return incoming[key];
-        return existing[key] || incoming[key] || '';
-    }
-
-    function contactAvatarField(existing, incoming) {
-        if (isAgentProfileContact(incoming) && incoming.avatar) return incoming.avatar;
-        if (isDefaultContactAvatar(existing.avatar) && incoming.avatar) return incoming.avatar;
-        return existing.avatar || incoming.avatar || DEFAULT_CONTACT_AVATAR;
-    }
-
     function contactDefaults(contact = {}) {
         const id = String(contact.id || '').trim() || `c${Date.now()}`;
         const chatTheme = getContactChatThemeKey(contact);
@@ -1985,8 +1668,7 @@
             pinned: !!contact.pinned,
             lastMessage: String(contact.lastMessage || ''),
             lastTime: String(contact.lastTime || ''),
-            avatar: String(contact.avatar || DEFAULT_CONTACT_AVATAR),
-            profileSource: String(contact.profileSource || contact._profileSource || ''),
+            avatar: String(contact.avatar || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&q=80'),
             topics: Array.isArray(contact.topics) ? contact.topics : [],
             messages: Array.isArray(contact.messages) ? contact.messages : [],
             settings: {
@@ -2010,7 +1692,6 @@
 
     function mergeContact(contact) {
         const normalized = contactDefaults(contact);
-        clearDeletedContactId(normalized.id);
         const idx = state.contacts.findIndex((item) => String(item.id || '').toLowerCase() === normalized.id.toLowerCase());
         if (idx >= 0) {
             state.contacts[idx] = { ...state.contacts[idx], ...normalized };
@@ -2058,31 +1739,6 @@
             return false;
         } catch (error) {
             console.warn('[agents] register contact failed', error);
-            return false;
-        }
-    }
-
-    async function saveContactProfileToAgent(contact) {
-        if (!contact?.id) return false;
-        const payload = {
-            display_name: contact.name || contact.display_name || contact.id,
-            avatar: contact.avatar || '',
-            description: contact.bio || '',
-            source: contact.roleTag || 'murmur',
-            is_active: true,
-        };
-        try {
-            const resp = await fetch(`${API_BASE}/api/agents/${encodeURIComponent(contact.id)}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            if (resp.ok) return true;
-            if (resp.status === 404) return registerAgentForContact(contact);
-            console.warn('[agents] profile save failed', resp.status);
-            return false;
-        } catch (error) {
-            console.warn('[agents] profile save failed', error);
             return false;
         }
     }
@@ -2316,7 +1972,7 @@
         const c = byId(state.currentContactId) || state.contacts[0];
         const quoteMoment = state.quoteMomentId ? getMoment(state.quoteMomentId) : null;
         const quoteMessage = state.quoteMessageId ? c.messages.find((item) => item.id === state.quoteMessageId) : null;
-        const messages = compactVisibleEventMessages(visibleChatMessages(conversationMessagesForContact(c)));
+        const messages = visibleChatMessages(conversationMessagesForContact(c));
         const attachments = (state.chatAttachments || []).map(serializeChatAttachment).filter(Boolean);
         return `
       <section class="room-page room-theme-${c.theme}">
@@ -2329,7 +1985,7 @@
           <input id="chat-image-input" class="moment-image-input" type="file" accept="image/*" multiple />
           <div class="composer-card">
             <div class="composer-input-wrap">
-              <div class="chat-input" contenteditable="true" role="textbox" aria-label="\u8f93\u5165\u6d88\u606f" data-placeholder="\u8f93\u5165\u6d88\u606f..." data-empty="true"></div>
+              <input class="chat-input" placeholder="\u8f93\u5165\u6d88\u606f..." value="" />
             </div>
             <button class="icon-btn icon-circle soft-mini" data-action="expand-actions" aria-label="\u9644\u4ef6">${icon('attach')}</button>
             ${state.streamingAbortController
@@ -2346,53 +2002,6 @@
         return mergeMessageLists([], messages).map(contactMessageFromStored).filter(isRenderableMessage);
     }
 
-    const SAME_EVENT_VISIBLE_LIMIT = 3;
-
-    function eventDisplayKey(message = {}) {
-        return message.role === 'event' ? messageTextValue(message).replace(/\s+/g, ' ').trim() : '';
-    }
-
-    function compactVisibleEventMessages(messages = []) {
-        const out = [];
-        let currentKey = '';
-        let visibleCount = 0;
-        let hiddenCount = 0;
-        let hiddenAnchor = null;
-        const flushHidden = () => {
-            if (!hiddenCount || !hiddenAnchor) return;
-            out.push(contactMessageFromStored({
-                ...hiddenAnchor,
-                id: `${hiddenAnchor.id || currentKey}__event_more_${hiddenCount}`,
-                role: 'event',
-                content: `同类活动还有 ${hiddenCount} 条`,
-                text: `同类活动还有 ${hiddenCount} 条`,
-            }));
-            hiddenCount = 0;
-            hiddenAnchor = null;
-        };
-        messages.forEach((message) => {
-            const key = eventDisplayKey(message);
-            if (!key || key !== currentKey) {
-                flushHidden();
-                currentKey = key;
-                visibleCount = key ? 0 : 0;
-            }
-            if (!key) {
-                out.push(message);
-                return;
-            }
-            visibleCount += 1;
-            if (visibleCount <= SAME_EVENT_VISIBLE_LIMIT) {
-                out.push(message);
-            } else {
-                hiddenCount += 1;
-                hiddenAnchor = message;
-            }
-        });
-        flushHidden();
-        return out;
-    }
-
     function messageRenderMeta(messages = [], index = 0) {
         const message = messages[index] || {};
         const prev = messages[index - 1] || null;
@@ -2401,14 +2010,6 @@
             : 0;
         const showTime = !prev || !sameMessageMinute(prev, message) || gap > 5 * 60 * 1000;
         return { showTime };
-    }
-
-    function userBubbleSizeClass(text = '') {
-        const chars = Array.from(String(text || '').replace(/\s+/g, '')).length;
-        if (chars <= 2) return ' user-bubble-xs';
-        if (chars <= 5) return ' user-bubble-sm';
-        if (chars <= 10) return ' user-bubble-md';
-        return '';
     }
 
     function renderMessage(message, contact, meta = {}) {
@@ -2426,7 +2027,7 @@
         const isCCSource = msgSource === 'claude-code';
         const showCodexBadge = isCodexSource && isCodexEnabledForContact(contact);
         const showCCBadge = isCCSource && isCCEnabledForContact(contact);
-        const allowReasoning = !!message.thinking || !!contact?.settings?.reasoning_visibility;
+        const allowReasoning = !!contact?.settings?.reasoning_visibility;
         const avatar = message.role === 'ai'
             ? `<img class="bubble-avatar" src="${contact.avatar}" alt="${escapeHtml(contact.name)}" />`
             : '';
@@ -2436,14 +2037,11 @@
         const cotButton = message.role === 'ai' && allowReasoning && message.thinking && !message.typing
             ? `<button class="bubble-cot-btn" data-action="toggle-thinking" data-id="${message.id}" aria-label="\u5c55\u5f00\u72ec\u767d">${icon('bubbleHeart')}</button>`
             : '';
-        const bottomTools = !message.typing && !message.streaming
+        const bottomTools = message.role === 'ai' && !message.typing && !message.streaming
             ? `
         <div class="bubble-bottom-tools ${state.activeBubbleToolsId === message.id ? 'open' : ''}">
-          ${message.role === 'ai' ? `<button class="bubble-mini-btn" data-action="reroll-msg" data-id="${message.id}" aria-label="\u91cd\u8bd5">${icon('reroll')}</button>` : ''}
-          ${message.role === 'ai' ? `<button class="bubble-mini-btn${message.voiceLoading ? ' is-loading' : ''}" data-action="speak-msg" data-id="${message.id}" aria-label="\u6717\u8bfb">${icon('speaker')}</button>` : ''}
+          <button class="bubble-mini-btn" data-action="reroll-msg" data-id="${message.id}" aria-label="\u91cd\u8bd5">${icon('reroll')}</button>
           <button class="bubble-mini-btn" data-action="quote-msg" data-id="${message.id}" aria-label="\u5f15\u7528">${icon('quote')}</button>
-          <button class="bubble-mini-btn" data-action="copy-msg" data-id="${message.id}" aria-label="\u590d\u5236">${icon('copy')}</button>
-          <button class="bubble-mini-btn" data-action="delete-msg" data-id="${message.id}" aria-label="\u5220\u9664">${icon('trash')}</button>
         </div>
       `
             : '';
@@ -2456,65 +2054,36 @@
             ? renderToolLines(message.toolCalls)
             : '';
         const text = normalizeBubbleText(messageTextValue(message));
-        const sizeClass = message.role === 'user' ? userBubbleSizeClass(text) : '';
         const attachments = messageAttachments(message);
         const attachmentBlock = renderMessageAttachments(attachments);
         const showInlineTime = meta.showTime && message.time && !message.typing;
-        const inlineTime = showInlineTime ? `<time class="bubble-time">${escapeHtml(message.time)}</time>` : '';
-        const timedBubbleClass = showInlineTime ? ' has-time' : '';
+        const inlineTimeClass = attachments.length || text.length > 18 || text.includes('\n') ? 'block-time' : 'tail-time';
+        const inlineTime = showInlineTime ? `<time class="bubble-time ${inlineTimeClass}">${escapeHtml(message.time)}</time>` : '';
         const showSourceMeta = message.role === 'ai' && sourceBadge;
-        const hasVoice = message.role === 'ai' && !!message.voiceUrl;
-        const voiceBarInline = hasVoice ? renderVoiceBar(message) : '';
-        const textBody = `${attachmentBlock}${text ? `<div class="message-text">${renderMessageTextHtml(text)}</div>` : ''}`;
-        const bubbleBody = (message.typing || (message.streaming && !message.text))
-            ? `<div class="typing-dots"><span></span><span></span><span></span></div>`
-            : (hasVoice && !message.voiceShowText)
-                ? voiceBarInline
-                : `${textBody}${hasVoice ? voiceBarInline : ''}${inlineTime}`;
         const bubbleWrap = `
-          <div class="message-bubble-wrap${sizeClass}">
+          <div class="message-bubble-wrap">
             ${showSourceMeta ? `<div class="bubble-meta-row">
               ${sourceBadge}
             </div>` : ''}
-            <div class="message-bubble ${roleClass}${bubbleClassExtra}${timedBubbleClass}" data-msg-id="${message.id}" data-action="toggle-message-tools" data-id="${message.id}">
+            <div class="message-bubble ${roleClass}${bubbleClassExtra}" ${message.role === 'ai' ? `data-msg-id="${message.id}" data-action="toggle-message-tools" data-id="${message.id}"` : ''}>
               ${cotButton}
-              ${bubbleBody}
+              ${(message.typing || (message.streaming && !message.text))
+                  ? `<div class="typing-dots"><span></span><span></span><span></span></div>`
+                  : `${attachmentBlock}${text ? `<div class="message-text">${escapeHtml(text)}${inlineTimeClass === 'tail-time' ? inlineTime : ''}</div>` : ''}${inlineTimeClass === 'block-time' ? inlineTime : ''}`}
             </div>
             ${bottomTools}
           </div>`;
         const colInner = message.role === 'ai' && (thinkingBlock || toolLinesBlock)
             ? `${thinkingBlock}${toolLinesBlock}${bubbleWrap}`
             : `${bubbleWrap}${thinkingBlock}${toolLinesBlock}`;
-        const voiceStatus = message.role === 'ai' ? renderVoiceStatus(message) : '';
         return `
       <div class="message-row ${roleClass}" data-msg-id="${message.id}">
         ${avatar}
         <div class="message-bubble-col">
           ${colInner}
-          ${voiceStatus}
         </div>
       </div>
     `;
-    }
-
-    function renderVoiceBar(message) {
-        // 有语音时气泡里显示语音条 + 末尾“转文字”切换按钮（点一下播放，不自动播）
-        const toLabel = message.voiceShowText ? '收起文字' : '转文字';
-        return `
-          <div class="voice-bar-wrap" style="display:flex;align-items:center;gap:8px;min-width:180px;">
-            <audio class="voice-bar" data-voice-id="${message.id}" controls preload="auto" src="${escapeHtml(message.voiceUrl)}" style="height:34px;flex:1 1 auto;max-width:220px;"></audio>
-            <button type="button" class="voice-totext-btn" data-action="toggle-voice-text" data-id="${message.id}" style="background:none;border:none;padding:2px 4px;font-size:12px;line-height:1;color:rgba(120,100,90,.72);cursor:pointer;white-space:nowrap;">${toLabel}</button>
-          </div>`;
-    }
-
-    function renderVoiceStatus(message) {
-        if (message.voiceLoading) {
-            return `<div class="voice-bar-status" style="font-size:12px;color:rgba(120,100,90,.7);margin-top:4px;">语音合成中…</div>`;
-        }
-        if (message.voiceError) {
-            return `<div class="voice-bar-status voice-bar-error" style="font-size:12px;color:#c8736a;margin-top:4px;">语音失败：${escapeHtml(message.voiceError)}</div>`;
-        }
-        return '';
     }
 
     function renderQuoteBar(moment) {
@@ -2924,7 +2493,7 @@
         <div class="rp-composer">
           <div class="composer-card">
             <div class="composer-input-wrap">
-              <div class="chat-input" contenteditable="true" role="textbox" aria-label="\u8f93\u5165\u5267\u60c5" data-placeholder="\u8f93\u5165\u5267\u60c5..." data-empty="true"></div>
+              <input class="chat-input" placeholder="\u8f93\u5165\u5267\u60c5..." value="" />
             </div>
             ${state.streamingAbortController
                 ? `<button class="icon-btn send-round send-stop-active" data-action="fake-send" aria-label="\u505c\u6b62">${icon('stop')}</button>`
@@ -2960,7 +2529,7 @@
         return parts.map((part) => {
             const isAction = /^\s*(\[|［)/.test(part);
             const cls = isAction ? 'rp-action' : 'rp-dialogue';
-            return `<div class="${cls}">${renderMarkdownToHtml(part)}</div>`;
+            return `<span class="${cls}">${escapeHtml(part)}</span>`;
         }).join('');
     }
 
@@ -3048,19 +2617,6 @@
     function renderContactSettings() {
         return renderContactSettingsV2();
     }
-
-    function renderContactPersonaEditor() {
-        const c = byId(state.currentContactId) || state.contacts[0];
-        if (!c) return '';
-        return `
-      <section class="contact-persona-editor-page page-block">
-        <div class="settings-group glass-frost ai-panel contact-persona-editor-card">
-          <textarea class="ai-textarea persona-textarea contact-persona-textarea contact-persona-fullscreen" data-contact-field="persona" placeholder="\u5728\u8fd9\u91cc\u8f93\u5165 AI \u7684\u4eba\u8bbe\u3001\u89d2\u8272\u8bf4\u660e\u3001\u884c\u4e3a\u6307\u4ee4\u3002">${escapeHtml(c.persona || '')}</textarea>
-        </div>
-      </section>
-    `;
-    }
-
     function renderContactSettingsV2() {
         const c = byId(state.currentContactId) || state.contacts[0];
         const s = c.settings;
@@ -3114,9 +2670,13 @@
           </div>
           <div class="settings-group glass-frost ai-panel">
             <h3>\u89d2\u8272\u8bbe\u5b9a</h3>
-            <button type="button" class="contact-persona-preview" data-action="open-contact-persona-editor" aria-label="\u7f16\u8f91\u89d2\u8272\u8bbe\u5b9a">
-              <span>${escapeHtml(c.persona || '\u8fd8\u6ca1\u6709\u89d2\u8272\u8bbe\u5b9a')}</span>
+            <button class="setting-row nav-row persona-collapse-toggle" data-action="toggle-contact-persona" aria-expanded="${state.contactPersonaExpanded ? 'true' : 'false'}">
+              <div class="setting-copy">
+                <strong>${state.contactPersonaExpanded ? '\u6536\u8d77\u89d2\u8272\u8bbe\u5b9a' : '\u5c55\u5f00\u89d2\u8272\u8bbe\u5b9a'}</strong>
+              </div>
+              <span class="row-chevron advanced-chevron ${state.contactPersonaExpanded ? 'open' : ''}">${icon('chevron')}</span>
             </button>
+                <textarea class="ai-textarea persona-textarea contact-persona-textarea ${state.contactPersonaExpanded ? 'expanded' : 'collapsed'}" data-contact-field="persona" rows="${state.contactPersonaExpanded ? '10' : '3'}" style="height:${state.contactPersonaExpanded ? '320px' : '96px'};min-height:${state.contactPersonaExpanded ? '320px' : '96px'};max-height:${state.contactPersonaExpanded ? '58vh' : '96px'};overflow-y:auto;resize:none;" placeholder="\u5728\u8fd9\u91cc\u8f93\u5165 AI \u7684\u4eba\u8bbe\u3001\u89d2\u8272\u8bf4\u660e\u3001\u884c\u4e3a\u6307\u4ee4\u3002">${escapeHtml(c.persona || '')}</textarea>
             ${switchRow('显示推理内容', '仅在模型返回推理内容时显示', s.reasoning_visibility || false, 'toggle-contact', 'reasoning_visibility')}
           </div>
           <div class="settings-group glass-frost ai-panel">
@@ -3740,17 +3300,17 @@
         if (!silent) render();
         try {
             const qs = new URLSearchParams({
-                hours: '168',
+                hours: '24',
                 limit: '50',
                 agent_id: c?.id || state.currentContactId || '',
             });
+            if (c?.sessionId) qs.set('session_id', c.sessionId);
             const resp = await fetch(`${API_BASE}/api/activity-log/recent?${qs.toString()}`);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json().catch(() => ({}));
             state.activityLogEntries = Array.isArray(data.items)
                 ? data.items.map(normalizeActivityLogItem)
                 : [];
-            state.activityLogSources = data.sources || {};
             state.activityLogLoadedAt = new Date().toISOString();
         } catch (error) {
             console.warn('[activity log] load failed', error);
@@ -3805,7 +3365,7 @@
         </div>
         <div class="cot-log-stack">
           ${state.activityLogLoading ? '<div class="cot-log-empty glass-frost"><span class="cot-log-empty-icon">' + icon('cot') + '</span><strong>正在加载活动日志</strong><p>等一下，别盯着白板发呆。</p></div>' : ''}
-          ${!state.activityLogLoading && state.activityLogLoadedAt && !logs.length ? `<div class="cot-log-empty glass-frost"><span class="cot-log-empty-icon">${icon('file')}</span><strong>还没有${currentMode.label}记录</strong><p>已接真实后端：activity ${Number(state.activityLogSources?.activity_events || 0)} / proactive ${Number(state.activityLogSources?.proactive_messages || 0)} / cot ${Number(state.activityLogSources?.cot_logs || 0)}</p></div>` : ''}
+          ${!state.activityLogLoading && state.activityLogLoadedAt && !logs.length ? `<div class="cot-log-empty glass-frost"><span class="cot-log-empty-icon">${icon('file')}</span><strong>还没有${currentMode.label}记录</strong><p>别急，这种脑内流现在还没掉下来。</p></div>` : ''}
           ${logs.map((item) => {
             const visibleSteps = item.steps;
             return `
@@ -3956,283 +3516,14 @@
         }
     }
 
-    function updateChatInputEmptyState(input) {
-        if (!input?.classList?.contains('chat-input')) return;
-        const text = getChatInputText(input);
-        input.dataset.empty = text.trim() ? 'false' : 'true';
-    }
-
-    function chatInputTextLength(input) {
-        return getChatInputText(input).length;
-    }
-
-    function getChatInputCaretOffset(input) {
-        const selection = window.getSelection?.();
-        if (!input?.isContentEditable || !selection || !selection.rangeCount || !selectionBelongsToInput(input)) return null;
-        const range = selection.getRangeAt(0);
-        const before = range.cloneRange();
-        before.selectNodeContents(input);
-        before.setEnd(range.startContainer, range.startOffset);
-        const start = before.toString().length;
-        before.setEnd(range.endContainer, range.endOffset);
-        return { start, end: before.toString().length };
-    }
-
-    function setChatInputCaretOffset(input, saved) {
-        if (!input?.isContentEditable || !saved) return;
-        const max = chatInputTextLength(input);
-        const start = Math.max(0, Math.min(max, Number(saved.start) || 0));
-        const end = Math.max(start, Math.min(max, Number(saved.end) || start));
-        const range = document.createRange();
-        const walker = document.createTreeWalker(input, NodeFilter.SHOW_TEXT);
-        let current = 0;
-        let startSet = false;
-        let endSet = false;
-        let node;
-        while ((node = walker.nextNode())) {
-            const len = node.nodeValue.length;
-            if (!startSet && current + len >= start) {
-                range.setStart(node, start - current);
-                startSet = true;
-            }
-            if (!endSet && current + len >= end) {
-                range.setEnd(node, end - current);
-                endSet = true;
-                break;
-            }
-            current += len;
-        }
-        if (!startSet) range.setStart(input, input.childNodes.length);
-        if (!endSet) range.setEnd(input, input.childNodes.length);
-        const selection = window.getSelection?.();
-        selection?.removeAllRanges();
-        selection?.addRange(range);
-    }
-
-    function syncChatInputHeight(input, { collapse = false } = {}) {
-        if (!input?.classList?.contains('chat-input')) return;
-        const wrap = input.closest('.composer-input-wrap');
-        if (!wrap) return;
-        if (collapse || !getChatInputText(input).trim()) {
-            state.chatInputHeight = 0;
-            wrap.style.removeProperty('height');
-            wrap.style.removeProperty('max-height');
-            wrap.scrollTop = 0;
-            return;
-        }
-        wrap.style.height = 'auto';
-        const nextHeight = Math.min(Math.max(34, input.scrollHeight + 14), 132);
-        state.chatInputHeight = nextHeight;
-        wrap.style.height = `${nextHeight}px`;
-        wrap.style.maxHeight = '132px';
-    }
-
-    function resetChatInputDraftState() {
-        state.chatInputDraft = '';
-        state.chatInputHeight = 0;
-        state.chatInputSelection = null;
-    }
-
-    function captureChatInputState() {
-        const input = root()?.querySelector('.chat-input');
-        if (!input) return null;
-        const focused = document.activeElement === input || selectionBelongsToInput(input);
-        const text = getChatInputText(input);
-        state.chatInputDraft = text;
-        state.chatInputFocused = focused;
-        state.chatInputSelection = focused ? getChatInputCaretOffset(input) : null;
-        const wrap = input.closest('.composer-input-wrap');
-        const height = wrap ? Math.round(wrap.getBoundingClientRect().height) : 0;
-        if (text.trim() && height > 34) state.chatInputHeight = height;
-        return {
-            text,
-            focused,
-            selection: state.chatInputSelection,
-            height: state.chatInputHeight,
-        };
-    }
-
-    function restoreChatInputDraft(input) {
-        if (!input?.classList?.contains('chat-input')) return;
-        const draft = String(state.chatInputDraft || '');
-        if (getChatInputText(input) !== draft) {
-            setChatInputText(input, draft, { emitInput: false });
-        } else {
-            updateChatInputEmptyState(input);
-        }
-    }
-
-    function restoreChatInputState(input, snapshot = null) {
-        if (!input?.classList?.contains('chat-input')) return;
-        restoreChatInputDraft(input);
-        const draft = getChatInputText(input);
-        const wrap = input.closest('.composer-input-wrap');
-        const savedHeight = Number(snapshot?.height || state.chatInputHeight || 0);
-        if (draft.trim() && savedHeight > 34 && wrap) {
-            wrap.style.height = `${Math.min(savedHeight, 132)}px`;
-            wrap.style.maxHeight = '132px';
-        } else {
-            syncChatInputHeight(input, { collapse: !draft.trim() });
-        }
-        if (snapshot?.focused || state.chatInputFocused) {
-            input.focus({ preventScroll: true });
-            setChatInputCaretOffset(input, snapshot?.selection || state.chatInputSelection);
-        }
-    }
-
-    function getChatInputText(input) {
-        if (!input) return '';
-        if (input.isContentEditable) {
-            return String(input.innerText || input.textContent || '').replace(/\u00a0/g, ' ');
-        }
-        return String(input.value || '');
-    }
-
-    function setChatInputText(input, text = '', options = {}) {
-        if (!input) return;
-        const next = String(text || '');
-        if (input.isContentEditable) {
-            input.textContent = next;
-        } else {
-            input.value = next;
-        }
-        updateChatInputEmptyState(input);
-        syncChatInputHeight(input, { collapse: !next.trim() });
-        if (options.emitInput !== false) input.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-
-    function selectionBelongsToInput(input) {
-        const selection = window.getSelection?.();
-        if (!input || !selection || !selection.rangeCount) return false;
-        const range = selection.getRangeAt(0);
-        return input.contains(range.commonAncestorContainer);
-    }
-
-    function placeCaretAtEnd(input) {
-        if (!input?.isContentEditable) return;
-        input.focus();
-        const range = document.createRange();
-        range.selectNodeContents(input);
-        range.collapse(false);
-        const selection = window.getSelection?.();
-        selection?.removeAllRanges();
-        selection?.addRange(range);
-    }
-
-    function clickIsAfterChatInputText(input, event) {
-        if (!input?.isContentEditable) return false;
-        const text = getChatInputText(input);
-        if (!text.trim()) return true;
-        const range = document.createRange();
-        range.selectNodeContents(input);
-        const rects = Array.from(range.getClientRects());
-        range.detach?.();
-        if (!rects.length) return true;
-        const y = Number(event?.clientY || 0);
-        const sameLine = rects.filter((rect) => y >= rect.top - 4 && y <= rect.bottom + 4);
-        const rect = sameLine[sameLine.length - 1] || rects[rects.length - 1];
-        return Number(event?.clientX || 0) > rect.right + 4;
-    }
-
-    function focusChatInputFromComposerClick(input, event) {
-        if (!input?.classList?.contains('chat-input')) return;
-        input.focus({ preventScroll: true });
-        if (clickIsAfterChatInputText(input, event)) {
-            placeCaretAtEnd(input);
-        }
-    }
-
     function insertPlainTextIntoInput(input, text) {
         if (!input || !text) return;
-        const nextText = String(text);
-        if (input.isContentEditable) {
-            input.focus();
-            if (!selectionBelongsToInput(input)) placeCaretAtEnd(input);
-            const selection = window.getSelection?.();
-            if (selection?.rangeCount) {
-                const range = selection.getRangeAt(0);
-                range.deleteContents();
-                const node = document.createTextNode(nextText);
-                range.insertNode(node);
-                range.setStartAfter(node);
-                range.setEndAfter(node);
-                selection.removeAllRanges();
-                selection.addRange(range);
-            } else {
-                input.append(document.createTextNode(nextText));
-            }
-            updateChatInputEmptyState(input);
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            return;
-        }
         const value = String(input.value || '');
         const start = typeof input.selectionStart === 'number' ? input.selectionStart : value.length;
         const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
-        input.value = `${value.slice(0, start)}${nextText}${value.slice(end)}`;
-        const nextPos = start + nextText.length;
+        input.value = `${value.slice(0, start)}${text}${value.slice(end)}`;
+        const nextPos = start + text.length;
         input.setSelectionRange?.(nextPos, nextPos);
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-
-    function sanitizeChatInputHtml(html) {
-        if (!html) return '';
-        const allowedTags = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'S', 'BR', 'DIV', 'P', 'SPAN']);
-        const template = document.createElement('template');
-        template.innerHTML = String(html);
-        const cleanNode = (node) => {
-            if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent || '');
-            if (node.nodeType !== Node.ELEMENT_NODE) return document.createTextNode('');
-            const tag = node.tagName;
-            if (tag === 'IMG') return document.createTextNode(node.alt || '');
-            const children = Array.from(node.childNodes).map(cleanNode);
-            if (tag === 'BR') return document.createElement('br');
-            if (!allowedTags.has(tag)) {
-                const fragment = document.createDocumentFragment();
-                children.forEach((child) => fragment.appendChild(child));
-                return fragment;
-            }
-            const outTag = tag === 'STRONG' ? 'b' : tag === 'EM' ? 'i' : tag.toLowerCase();
-            const out = document.createElement(outTag);
-            children.forEach((child) => out.appendChild(child));
-            return out;
-        };
-        const fragment = document.createDocumentFragment();
-        Array.from(template.content.childNodes).forEach((node) => fragment.appendChild(cleanNode(node)));
-        const box = document.createElement('div');
-        box.appendChild(fragment);
-        return box.innerHTML;
-    }
-
-    function insertHtmlIntoInput(input, html, fallbackText = '') {
-        if (!input) return;
-        const cleanHtml = sanitizeChatInputHtml(html);
-        if (!input.isContentEditable || !cleanHtml) {
-            insertPlainTextIntoInput(input, fallbackText || plainTextFromHtml(html));
-            return;
-        }
-        input.focus();
-        if (!selectionBelongsToInput(input)) placeCaretAtEnd(input);
-        const selection = window.getSelection?.();
-        if (!selection?.rangeCount) {
-            input.insertAdjacentHTML('beforeend', cleanHtml);
-            updateChatInputEmptyState(input);
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            return;
-        }
-        const range = selection.getRangeAt(0);
-        range.deleteContents();
-        const template = document.createElement('template');
-        template.innerHTML = cleanHtml;
-        const fragment = template.content;
-        const lastNode = fragment.lastChild;
-        range.insertNode(fragment);
-        if (lastNode) {
-            range.setStartAfter(lastNode);
-            range.setEndAfter(lastNode);
-            selection.removeAllRanges();
-            selection.addRange(range);
-        }
-        updateChatInputEmptyState(input);
         input.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
@@ -4243,49 +3534,30 @@
         return (temp.textContent || temp.innerText || '').replace(/\n{3,}/g, '\n\n');
     }
 
-    function getActiveChatInput(target = null) {
-        const direct = target?.closest?.('.chat-input');
-        if (direct) return direct;
-        return root()?.querySelector('.chat-input') || null;
-    }
-
-    function clipboardImageFiles(clipboard) {
-        if (!clipboard) return [];
+    async function handleChatInputPaste(event) {
+        if (state.currentView !== 'room') return;
+        const clipboard = event.clipboardData;
+        if (!clipboard) return;
         const directFiles = Array.from(clipboard.files || []).filter(isChatImageFile);
         const itemFiles = Array.from(clipboard.items || [])
             .filter((item) => item.kind === 'file' && /^image\//i.test(item.type || ''))
             .map((item) => item.getAsFile())
             .filter(isChatImageFile);
-        return [...directFiles, ...itemFiles].filter((file, index, all) => (
+        const imageFiles = [...directFiles, ...itemFiles].filter((file, index, all) => (
             index === all.findIndex((item) => item.name === file.name && item.size === file.size && item.type === file.type)
         ));
-    }
-
-    async function handleChatInputPaste(event, inputOverride = null) {
-        if (!['room', 'rpRoom'].includes(state.currentView)) return false;
-        const clipboard = event.clipboardData;
-        if (!clipboard) return false;
-        const input = inputOverride || event.currentTarget || getActiveChatInput(event.target);
-        if (!input) return false;
-        const imageFiles = clipboardImageFiles(clipboard);
         const plain = clipboard.getData('text/plain') || '';
         const html = clipboard.getData('text/html') || '';
         if (imageFiles.length) {
             event.preventDefault();
-            event.stopPropagation?.();
             await addChatImageFiles(imageFiles);
-            const nextInput = getActiveChatInput(input) || input;
-            if (html.trim()) insertHtmlIntoInput(nextInput, html, plain);
-            else if (plain.trim()) insertPlainTextIntoInput(nextInput, plain);
-            return true;
+            if (plain.trim()) insertPlainTextIntoInput(event.currentTarget, plain);
+            return;
         }
         if (html) {
             event.preventDefault();
-            event.stopPropagation?.();
-            insertHtmlIntoInput(input, html, plain || plainTextFromHtml(html));
-            return true;
+            insertPlainTextIntoInput(event.currentTarget, plain || plainTextFromHtml(html));
         }
-        return false;
     }
 
     function openAvatarCropper(kind, src) {
@@ -4420,8 +3692,6 @@
                 const c = byId(state.currentContactId);
                 if (c) {
                     c.avatar = nextAvatar;
-                    c.profileSource = 'agent';
-                    await saveContactProfileToAgent(c);
                     queueLocalSyncIfChanged(120);
                 }
             }
@@ -4447,30 +3717,24 @@
         mount.addEventListener('pointerup', handleAvatarCropperPointerUp);
         mount.addEventListener('pointercancel', handleAvatarCropperPointerUp);
 
-        const setBubbleToolsOpen = (msgId) => {
-            const nextId = String(msgId || '').trim();
-            state.activeBubbleToolsId = nextId || null;
-            const mountEl = root();
-            if (!mountEl) return;
-            mountEl.querySelectorAll('.bubble-bottom-tools.open').forEach((el) => {
-                el.classList.remove('open');
-            });
-            if (nextId) {
-                mountEl
-                    .querySelector(`.message-row[data-msg-id="${CSS.escape(nextId)}"] .bubble-bottom-tools`)
-                    ?.classList.add('open');
-            }
-        };
-
-        // Long-press a bubble to open the floating tools without re-rendering.
+        // Long-press AI bubble to quote/reply
         let pressTimer;
         const startPress = (e) => {
             if (isEditableTarget(e.target)) return;
-            const bubble = e.target.closest('.message-bubble');
+            const bubble = e.target.closest('.message-bubble.from-ai');
             if (bubble) {
                 pressTimer = window.setTimeout(() => {
                     const msgId = bubble.dataset.msgId;
-                    setBubbleToolsOpen(msgId);
+                    const current = byId(state.currentContactId);
+                    const msg = current?.messages?.find((item) => item.id === msgId);
+                    if (msg?.text) {
+                        state.quoteMomentId = null;
+                        state.quoteMessageId = msgId;
+                        render();
+                        const input = root()?.querySelector('.chat-input');
+                        if (input) input.focus();
+                    }
+                    state.activeBubbleToolsId = msgId;
                     state.suppressBubbleToggle = true;
                     if (navigator.vibrate) navigator.vibrate(50);
                 }, 550);
@@ -4527,41 +3791,7 @@
         // Enter to send
         const chatInput = mount.querySelector('.chat-input');
         if (chatInput) {
-            const inputWrap = chatInput.closest('.composer-input-wrap');
-            if (inputWrap && inputWrap.dataset.focusBound !== '1') {
-                inputWrap.dataset.focusBound = '1';
-                inputWrap.addEventListener('pointerdown', (event) => {
-                    if (event.target.closest('[data-action]')) return;
-                    chatInput.focus({ preventScroll: true });
-                });
-                inputWrap.addEventListener('click', (event) => {
-                    if (event.target.closest('[data-action]')) return;
-                    focusChatInputFromComposerClick(chatInput, event);
-                });
-            }
-            restoreChatInputState(chatInput);
             chatInput.addEventListener('paste', handleChatInputPaste);
-            chatInput.addEventListener('input', () => {
-                updateChatInputEmptyState(chatInput);
-                syncChatInputHeight(chatInput);
-            });
-            chatInput.addEventListener('focus', () => {
-                state.chatInputFocused = true;
-                state.chatInputSelection = getChatInputCaretOffset(chatInput);
-            });
-            chatInput.addEventListener('blur', () => {
-                state.chatInputFocused = false;
-                state.chatInputSelection = null;
-            });
-            chatInput.addEventListener('keyup', () => {
-                state.chatInputSelection = getChatInputCaretOffset(chatInput);
-            });
-            chatInput.addEventListener('mouseup', () => {
-                state.chatInputSelection = getChatInputCaretOffset(chatInput);
-            });
-            chatInput.addEventListener('selectstart', () => {
-                state.chatInputFocused = true;
-            });
             chatInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -4678,14 +3908,6 @@
             state.activityLogEntries = [];
             render();
             loadActivityLog({ silent: true });
-            return;
-        }
-
-        if (action === 'open-contact-persona-editor') {
-            state._prevContactSettingsTab = 'model';
-            state.currentSettingsTab = 'model';
-            state.currentView = 'contactPersonaEditor';
-            render();
             return;
         }
 
@@ -4844,7 +4066,18 @@
             }
             const msgId = target.dataset.id;
             const nextId = state.activeBubbleToolsId === msgId ? null : msgId;
-            setBubbleToolsOpen(nextId);
+            state.activeBubbleToolsId = nextId;
+            const mount = root();
+            if (mount) {
+                mount.querySelectorAll('.bubble-bottom-tools.open').forEach((el) => {
+                    el.classList.remove('open');
+                });
+                if (nextId) {
+                    mount
+                        .querySelector(`.message-row[data-msg-id="${CSS.escape(nextId)}"] .bubble-bottom-tools`)
+                        ?.classList.add('open');
+                }
+            }
             return;
         }
 
@@ -5487,8 +4720,7 @@
                 add_note: '\u5e2e\u6211\u8bb0\u4e00\u6761\u4fbf\u7b7e',
                 list_notes: '\u5e2e\u6211\u770b\u770b\u6700\u8fd1\u4fbf\u7b7e',
             };
-            if (input) setChatInputText(input, mcpAction?.prompt || map[mcpAction?.mcpToolId || actionId] || map[actionId] || `${mcpAction?.label || ''}`.trim());
-            placeCaretAtEnd(input);
+            if (input) input.value = mcpAction?.prompt || map[mcpAction?.mcpToolId || actionId] || map[actionId] || `${mcpAction?.label || ''}`.trim();
         }
 
         if (action === 'fake-send') {
@@ -5526,24 +4758,6 @@
             }
         }
 
-        if (action === 'copy-msg') {
-            copyChatMessage(target.dataset.id);
-        }
-
-        if (action === 'delete-msg') {
-            deleteChatMessage(target.dataset.id);
-        }
-
-        if (action === 'speak-msg') {
-            speakChatMessage(target.dataset.id);
-        }
-
-        if (action === 'toggle-voice-text') {
-            const contact = byId(state.currentContactId);
-            const msg = contact?.messages?.find((item) => item.id === target.dataset.id);
-            if (msg) { msg.voiceShowText = !msg.voiceShowText; render(); }
-        }
-
         if (action === 'attach-option') {
             state.showAttach = false;
             const label = target.dataset.label || '';
@@ -5576,12 +4790,6 @@
                 ...(target.id === 'nc-bio' ? { bio: target.value || '' } : {}),
             };
         }
-        if (target?.classList?.contains('chat-input')) {
-            state.chatInputDraft = getChatInputText(target);
-            state.chatInputFocused = true;
-            state.chatInputSelection = getChatInputCaretOffset(target);
-            syncChatInputHeight(target, { collapse: !state.chatInputDraft.trim() });
-        }
         if (target.dataset.action === 'slide-contact') {
             const c = byId(state.currentContactId);
             const key = target.dataset.key;
@@ -5598,29 +4806,8 @@
         }
     }
 
-    // 系统日夜自动跟随：只在用户没显式选过完整主题时生效
-    const AUTO_THEME_KEY = 'murmur_auto_theme_v1';
-    function _applyAutoTheme() {
-        const current = state.globalSettings?.theme || '';
-        const hasExplicit = FULL_UI_THEMES.includes(current);
-        const userSet = (() => { try { return localStorage.getItem(AUTO_THEME_KEY) === '0'; } catch { return false; } })();
-        if (hasExplicit && userSet) return; // 用户手动选过，尊重选择
-        const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const target = dark ? 'claude-dark' : 'claude';
-        if (!state.globalSettings) state.globalSettings = {};
-        if (state.globalSettings.theme !== target) {
-            state.globalSettings.theme = target;
-            render();
-        }
-    }
-    // 监听系统主题变化
-    try {
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', _applyAutoTheme);
-    } catch { /* old browser */ }
-
     document.addEventListener('DOMContentLoaded', () => {
         loadLocalSnapshot();
-        _applyAutoTheme(); // 初始化时根据系统应用主题
         openChatAppDefault();
         pullRemoteSnapshot().finally(async () => {
             await loadContactsFromAllSources();
@@ -5691,8 +4878,6 @@
         }
         return sanitizeSyncPayload({
             contacts: state.contacts,
-            deletedContactIds: state.deletedContactIds,
-            restoredContactIds: state.restoredContactIds,
             moments: state.moments,
             actions: state.actions,
             globalSettings: state.globalSettings,
@@ -5737,7 +4922,7 @@
         const role = String(message.role || message.from || '').toLowerCase();
         const model = String(message.model || '').toLowerCase();
         const source = String(message.source || message.provider || '').toLowerCase();
-        return role === 'event' || model === 'event' || source === 'activity_event';
+        return role === 'event' || (role === 'system' && (model === 'event' || source === 'activity_event'));
     }
 
     function compactMessageMinute(message = {}) {
@@ -5758,7 +4943,7 @@
         const right = normalizeStoredMessage(b);
         if (left.role !== right.role) return false;
         if (messageTextValue(left) !== messageTextValue(right)) return false;
-        if (left.session_id && right.session_id && left.session_id !== right.session_id) return false;
+        if ((left.session_id || right.session_id) && left.session_id !== right.session_id) return false;
         const at = comparableTime(left.created_at || left.timestamp);
         const bt = comparableTime(right.created_at || right.timestamp);
         if (at && bt) return Math.abs(at - bt) <= 2 * 60 * 1000;
@@ -5777,61 +4962,6 @@
             keys.add(`soft:${session}|${normalized.role}|${minute}|${content}`);
         }
         return keys;
-    }
-
-    function compactAssistantText(text = '') {
-        return normalizeBubbleText(text)
-            .replace(/\s+/g, '')
-            .replace(/[，。！？、；：,.!?;:()[\]（）［］【】《》"'“”‘’`*_~\-—]/g, '');
-    }
-
-    function removeAssistantChunkDuplicates(messages = []) {
-        const sorted = messages.filter(Boolean).sort((a, b) => {
-            const at = comparableTime(a.created_at);
-            const bt = comparableTime(b.created_at);
-            if (at || bt) return at - bt;
-            return String(a.id).localeCompare(String(b.id));
-        });
-        const remove = new Set();
-        for (let i = 0; i < sorted.length; i += 1) {
-            const full = normalizeStoredMessage(sorted[i]);
-            if (full.role !== 'ai') continue;
-            const fullText = compactAssistantText(messageTextValue(full));
-            if (!fullText) continue;
-            const parts = [];
-            for (let j = i + 1; j < sorted.length; j += 1) {
-                const item = normalizeStoredMessage(sorted[j]);
-                if (item.role === 'user') break;
-                if (item.role !== 'ai') continue;
-                const text = compactAssistantText(messageTextValue(item));
-                if (!text) continue;
-                parts.push({ index: j, text });
-                const joined = parts.map((part) => part.text).join('');
-                if (joined === fullText || (parts.length >= 2 && fullText.includes(joined) && joined.length >= Math.max(24, Math.floor(fullText.length * 0.65)))) {
-                    remove.add(i);
-                    break;
-                }
-                if (!fullText.startsWith(joined) && !fullText.includes(joined)) break;
-                if (joined.length > fullText.length + 8) break;
-            }
-            const previousParts = [];
-            for (let j = i - 1; j >= 0; j -= 1) {
-                const item = normalizeStoredMessage(sorted[j]);
-                if (item.role === 'user') break;
-                if (item.role !== 'ai') continue;
-                const text = compactAssistantText(messageTextValue(item));
-                if (!text) continue;
-                previousParts.unshift(text);
-                const joined = previousParts.join('');
-                if (joined === fullText || (previousParts.length >= 2 && fullText.includes(joined) && joined.length >= Math.max(24, Math.floor(fullText.length * 0.65)))) {
-                    remove.add(i);
-                    break;
-                }
-                if (!fullText.endsWith(joined) && !fullText.includes(joined)) break;
-                if (joined.length > fullText.length + 8) break;
-            }
-        }
-        return sorted.filter((_item, index) => !remove.has(index));
     }
 
     function upsertMessage(list = [], message = {}) {
@@ -5879,9 +5009,6 @@
             ...(message.attachments ? { attachments: message.attachments } : {}),
             ...(message.thinking ? { thinking: message.thinking } : {}),
             ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
-            ...(message.typing ? { typing: true } : {}),
-            ...(message.streaming ? { streaming: true } : {}),
-            ...(message.transient ? { transient: true } : {}),
         };
     }
 
@@ -5921,7 +5048,7 @@
                 [...messageMergeKeys(next)].forEach((key) => keyToIndex.set(key, index));
             }
         });
-        return removeAssistantChunkDuplicates(merged).sort((a, b) => {
+        return merged.filter(Boolean).sort((a, b) => {
             const at = comparableTime(a.created_at);
             const bt = comparableTime(b.created_at);
             if (at || bt) return at - bt;
@@ -5944,150 +5071,11 @@
             if (!contact?.id) return;
             const contactMessages = Array.isArray(contact.messages) ? contact.messages : [];
             if (contactMessages.length || next[contact.id]?.length) {
-                const persistentMessages = contactMessages.filter((message) => !message?.transient);
-                const transientMessages = contactMessages.filter((message) => message?.transient).map(contactMessageFromStored);
-                next[contact.id] = mergeMessageLists(next[contact.id] || [], persistentMessages);
-                contact.messages = [...next[contact.id].map(contactMessageFromStored), ...transientMessages]
-                    .sort((a, b) => comparableTime(a.created_at) - comparableTime(b.created_at));
+                next[contact.id] = mergeMessageLists(next[contact.id] || [], contactMessages);
+                contact.messages = next[contact.id].map(contactMessageFromStored);
             }
         });
         state.conversations = next;
-    }
-
-    function persistedMessageId(messageId = '') {
-        return String(messageId || '').replace(/__part_\d+$/u, '');
-    }
-
-    function removeMessageFromContact(contact, messageId = '') {
-        const rawId = String(messageId || '').trim();
-        if (!contact || !rawId) return false;
-        const baseId = persistedMessageId(rawId);
-        const before = Array.isArray(contact.messages) ? contact.messages.length : 0;
-        contact.messages = (contact.messages || []).filter((message) => {
-            const id = String(message?.id || '');
-            return id !== rawId && id !== baseId && !id.startsWith(`${baseId}__part_`);
-        });
-        const stored = normalizeConversationMap(state.conversations);
-        stored[contact.id] = (stored[contact.id] || []).filter((message) => {
-            const id = String(message?.id || '');
-            return id !== rawId && id !== baseId && !id.startsWith(`${baseId}__part_`);
-        });
-        state.conversations = stored;
-        const last = contact.messages[contact.messages.length - 1];
-        contact.lastMessage = last?.text || '';
-        contact.lastTime = last?.time || '';
-        if (state.quoteMessageId === rawId || state.quoteMessageId === baseId) state.quoteMessageId = null;
-        if (state.activeBubbleToolsId === rawId || state.activeBubbleToolsId === baseId) state.activeBubbleToolsId = null;
-        return contact.messages.length !== before;
-    }
-
-    async function deleteChatMessage(messageId = '') {
-        const rawId = String(messageId || '').trim();
-        if (!rawId) return;
-        const backendId = persistedMessageId(rawId);
-        const contact = byId(state.currentContactId);
-        if (!contact) return;
-        const snapshot = (contact.messages || []).map((message) => ({ ...message }));
-        removeMessageFromContact(contact, rawId);
-        syncConversationsFromContacts();
-        queueLocalSyncIfChanged(120);
-        render();
-        try {
-            if (backendId) {
-                const resp = await fetch(`${API_BASE}/api/messages/${encodeURIComponent(backendId)}`, { method: 'DELETE' });
-                if (!resp.ok && resp.status !== 404) {
-                    const data = await resp.json().catch(() => ({}));
-                    throw new Error(data.detail || `HTTP ${resp.status}`);
-                }
-            }
-            state.toast = '消息已删除';
-        } catch (error) {
-            contact.messages = snapshot;
-            syncConversationsFromContacts();
-            state.toast = '删除消息失败';
-            console.warn('[message] delete failed', error);
-        }
-        queueLocalSyncIfChanged(120);
-        render();
-        window.setTimeout(() => {
-            state.toast = '';
-            render();
-        }, 1200);
-    }
-
-    async function speakChatMessage(messageId = '') {
-        const rawId = String(messageId || '').trim();
-        if (!rawId) return;
-        const contact = byId(state.currentContactId);
-        if (!contact) return;
-        const msg = (contact.messages || []).find((item) => item.id === rawId);
-        if (!msg) return;
-        const text = String(msg.text || msg.content || '').trim();
-        if (!text) {
-            state.toast = '这条没有可朗读的文字';
-            render();
-            window.setTimeout(() => { state.toast = ''; render(); }, 1200);
-            return;
-        }
-        // 已合成过：直接重播，不再调接口（省 TTS 额度）
-        if (msg.voiceUrl) {
-            const el = root()?.querySelector(`audio.voice-bar[data-voice-id="${rawId}"]`);
-            if (el) { try { el.currentTime = 0; } catch (_) {} el.play().catch(() => {}); }
-            return;
-        }
-        if (msg.voiceLoading) return;
-        msg.voiceLoading = true;
-        msg.voiceError = '';
-        render();
-        try {
-            const resp = await fetch(`${API_BASE}/api/voice/speak`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, agentId: contact.id }),
-            });
-            const data = await resp.json().catch(() => ({}));
-            if (!resp.ok || !data.audioUrl) {
-                throw new Error(data.detail || data.error || `HTTP ${resp.status}`);
-            }
-            msg.voiceUrl = data.audioUrl;
-            msg.voiceLoading = false;
-            // 默认隐藏文字、直接出语音条；点条上的播放键播放（不自动播）
-            msg.voiceShowText = false;
-            render();
-        } catch (error) {
-            msg.voiceLoading = false;
-            msg.voiceError = String(error?.message || error || '请求失败');
-            console.warn('[voice] speak failed', error);
-            render();
-        }
-    }
-
-    async function copyChatMessage(messageId = '') {
-        const rawId = String(messageId || '').trim();
-        const contact = byId(state.currentContactId);
-        const message = contact?.messages?.find((item) => String(item?.id || '') === rawId);
-        const text = messageTextValue(message || {});
-        if (!text) return;
-        try {
-            await navigator.clipboard?.writeText(text);
-            state.toast = '已复制';
-        } catch {
-            const area = document.createElement('textarea');
-            area.value = text;
-            area.style.position = 'fixed';
-            area.style.opacity = '0';
-            document.body.appendChild(area);
-            area.select();
-            document.execCommand('copy');
-            area.remove();
-            state.toast = '已复制';
-        }
-        state.activeBubbleToolsId = null;
-        render();
-        window.setTimeout(() => {
-            state.toast = '';
-            render();
-        }, 1000);
     }
 
     function hydrateContactsFromConversations() {
@@ -6122,14 +5110,13 @@
                 ...existing,
                 id: existing.id || contact.id,
                 agent_id: existing.agent_id || contact.agent_id || existing.id || contact.id,
-                name: contactProfileField(existing, contact, 'name'),
-                display_name: contactProfileField(existing, contact, 'display_name') || contactProfileField(existing, contact, 'name'),
-                bio: contactProfileField(existing, contact, 'bio'),
+                name: existing.name || contact.name,
+                display_name: existing.display_name || existing.name || contact.display_name || contact.name,
+                bio: existing.bio || contact.bio,
                 status: existing.status || contact.status,
-                handle: contactProfileField(existing, contact, 'handle'),
-                roleTag: contactProfileField(existing, contact, 'roleTag'),
-                avatar: contactAvatarField(existing, contact),
-                profileSource: isAgentProfileContact(contact) ? 'agent' : (existing.profileSource || contact.profileSource || ''),
+                handle: existing.handle || contact.handle,
+                roleTag: existing.roleTag || contact.roleTag,
+                avatar: existing.avatar || contact.avatar,
                 settings: { ...(contact.settings || {}), ...(existing.settings || {}) },
                 messages: messages.map(contactMessageFromStored),
                 lastMessage: existing.lastMessage || contact.lastMessage || messages[messages.length - 1]?.content || '',
@@ -6149,8 +5136,7 @@
     }
 
     function murmurHistoryMessageToStored(message = {}, contactId = '') {
-        const rawRole = String(message.role || '').toLowerCase();
-        const role = rawRole === 'user' ? 'user' : (rawRole === 'system' || rawRole === 'event' ? rawRole : 'ai');
+        const role = String(message.role || '').toLowerCase() === 'user' ? 'user' : 'ai';
         const createdAt = String(message.created_at || '');
         const content = messageTextValue(message);
         const model = String(message.model || '');
@@ -6272,7 +5258,6 @@
     }
 
     async function pollProactiveMessages({ silent = true } = {}) {
-        if (state.streamingAbortController) return;
         if (proactivePollInFlight) return;
         proactivePollInFlight = true;
         try {
@@ -6338,7 +5323,7 @@
         if (proactivePollTimer) return;
         proactivePollTimer = window.setInterval(() => {
             pollProactiveMessages({ silent: true });
-        }, 60000);
+        }, 15000);
     }
 
     function mergeMoments(localMoments = [], remoteMoments = []) {
@@ -6449,47 +5434,6 @@
         return contacts.filter((contact) => !isDefaultMockContact(contact));
     }
 
-    function normalizeContactIdValue(value) {
-        return String(value || '').trim().toLowerCase();
-    }
-
-    function normalizeDeletedContactIds(value) {
-        if (!Array.isArray(value)) return [];
-        return [...new Set(value.map(normalizeContactIdValue).filter(Boolean))];
-    }
-
-    function deletedContactIdSet(extra = []) {
-        return new Set(normalizeDeletedContactIds([...(state.deletedContactIds || []), ...(extra || [])]));
-    }
-
-    function isDeletedContactId(contactId, extra = []) {
-        const id = normalizeContactIdValue(contactId);
-        return !!id && deletedContactIdSet(extra).has(id);
-    }
-
-    function filterDeletedContacts(contacts, extraDeletedIds = []) {
-        const deleted = deletedContactIdSet(extraDeletedIds);
-        if (!Array.isArray(contacts)) return [];
-        if (!deleted.size) return contacts;
-        return contacts.filter((contact) => !deleted.has(normalizeContactIdValue(contact?.id || contact?.agent_id)));
-    }
-
-    function rememberDeletedContactId(contactId) {
-        const id = normalizeContactIdValue(contactId);
-        if (!id) return;
-        state.deletedContactIds = normalizeDeletedContactIds([...(state.deletedContactIds || []), id]);
-    }
-
-    function clearDeletedContactId(contactId) {
-        const id = normalizeContactIdValue(contactId);
-        if (!id) return;
-        const before = normalizeDeletedContactIds(state.deletedContactIds);
-        state.deletedContactIds = before.filter((item) => item !== id);
-        if (before.length !== state.deletedContactIds.length) {
-            state.restoredContactIds = normalizeDeletedContactIds([...(state.restoredContactIds || []), id]);
-        }
-    }
-
     function isDefaultMockContacts(contacts) {
         return Array.isArray(contacts) && contacts.length > 0 && contacts.every((contact) => isDefaultMockContact(contact));
     }
@@ -6497,14 +5441,8 @@
     function sanitizeSyncPayload(payload = {}) {
         if (!payload || typeof payload !== 'object') return {};
         const next = { ...payload };
-        next.deletedContactIds = normalizeDeletedContactIds(next.deletedContactIds);
-        next.restoredContactIds = normalizeDeletedContactIds(next.restoredContactIds);
-        if (next.restoredContactIds.length) {
-            const restored = new Set(next.restoredContactIds);
-            next.deletedContactIds = next.deletedContactIds.filter((id) => !restored.has(id));
-        }
         if (Array.isArray(next.contacts)) {
-            next.contacts = filterDeletedContacts(filterDefaultMockContacts(next.contacts), next.deletedContactIds).map((contact) => contactDefaults(contact));
+            next.contacts = filterDefaultMockContacts(next.contacts).map((contact) => contactDefaults(contact));
         }
         if (next.conversations && typeof next.conversations === 'object') {
             next.conversations = normalizeConversationMap(next.conversations);
@@ -6551,43 +5489,17 @@
 
     function applyLocalPayload(payload, { source = 'local' } = {}) {
         if (!payload || typeof payload !== 'object') return;
-        const incomingDeletedContactIds = normalizeDeletedContactIds(payload.deletedContactIds);
-        const incomingRestoredContactIds = normalizeDeletedContactIds(payload.restoredContactIds);
-        if (incomingRestoredContactIds.length) {
-            const restored = new Set(incomingRestoredContactIds);
-            state.deletedContactIds = normalizeDeletedContactIds(state.deletedContactIds).filter((id) => !restored.has(id));
-            state.restoredContactIds = normalizeDeletedContactIds([...(state.restoredContactIds || []), ...incomingRestoredContactIds]);
-        }
-        if (incomingDeletedContactIds.length) {
-            const restored = new Set(incomingRestoredContactIds);
-            state.deletedContactIds = normalizeDeletedContactIds([
-                ...(state.deletedContactIds || []),
-                ...incomingDeletedContactIds.filter((id) => !restored.has(id)),
-            ]);
-            state.contacts = filterDeletedContacts(state.contacts);
-            if (isDeletedContactId(state.currentContactId)) state.currentContactId = state.contacts[0]?.id || '';
-        } else {
-            state.deletedContactIds = normalizeDeletedContactIds(state.deletedContactIds);
-        }
-        if (source === 'remote' && Array.isArray(payload.contacts)) {
-            state.contactSyncAuthoritative = true;
-        }
         if (Array.isArray(payload.contacts)) {
             const rawContacts = payload.contacts.map((contact) => contactDefaults(contact));
-            const nextContacts = filterDeletedContacts(filterDefaultMockContacts(rawContacts), incomingDeletedContactIds).map((contact) => contactDefaults(contact));
+            const nextContacts = filterDefaultMockContacts(rawContacts).map((contact) => contactDefaults(contact));
             const currentHasRealContacts = contactsHaveRealData(state.contacts);
             if (nextContacts.length) {
-                state.contacts = source === 'remote'
-                    ? mergeContacts([], nextContacts)
-                    : mergeContacts(state.contacts, nextContacts);
+                state.contacts = mergeContacts(state.contacts, nextContacts);
                 if (!byId(state.currentContactId)) state.currentContactId = state.contacts[0]?.id || '';
             } else if (isDefaultMockContacts(rawContacts)) {
                 if (!currentHasRealContacts) state.contacts = [];
                 if (!byId(state.currentContactId)) state.currentContactId = state.contacts[0]?.id || '';
                 console.warn(`[sync] ignored ${source} default mock contacts`);
-            } else if (source === 'remote') {
-                state.contacts = [];
-                state.currentContactId = '';
             } else if (!currentHasRealContacts) {
                 state.contacts = [];
                 state.currentContactId = '';
@@ -6707,15 +5619,16 @@
             if (readSyncMeta().pending) return;
         }
         const params = new URLSearchParams({ device_id: getDeviceId() });
-        if (meta.last_server_updated_at && state.contactSyncAuthoritative) {
-            params.set('since', meta.last_server_updated_at);
-        }
+        if (meta.last_server_updated_at) params.set('since', meta.last_server_updated_at);
 
         try {
             const resp = await fetch(`${API_BASE}/api/sync/pull?${params.toString()}`);
             if (!resp.ok) return;
             const data = await resp.json().catch(() => ({}));
-            if (!data?.has_update || !data?.payload) {
+            // Skip if no update, OR if this device pushed the data AND we already have real local contacts
+            // (if local contacts are gone, apply even for is_self so data is recovered)
+            const hasLocalContacts = contactsHaveRealData(state.contacts);
+            if (!data?.has_update || !data?.payload || (data?.is_self && hasLocalContacts)) {
                 if (data?.server_updated_at) {
                     writeSyncMeta({ ...meta, last_server_updated_at: data.server_updated_at, pending: meta.pending });
                 }
@@ -6751,7 +5664,6 @@
             handle: String(agent.display_handle || `@${id}`),
             roleTag: String(agent.source || 'agent'),
             avatar: String(agent.avatar || '').trim(),
-            profileSource: 'agent',
             pinned: false,
             unread: 0,
             lastMessage: '',
@@ -6798,32 +5710,13 @@
                 .filter((agent) => agent?.is_active !== false)
                 .map(agentToContact)
                 .filter(Boolean)
-                .filter((contact) => !isDefaultMockContact(contact))
-                .filter((contact) => !isDeletedContactId(contact.id));
+                .filter((contact) => !isDefaultMockContact(contact));
             console.info('[agents] loaded', contacts.map((contact) => ({
                 id: contact.id,
                 name: contact.name,
                 source: contact.roleTag || '',
             })));
             if (!contacts.length) return;
-            if (state.contactSyncAuthoritative && contactsHaveRealData(state.contacts)) {
-                const existingIds = new Set(state.contacts.map((contact) => normalizeContactIdValue(contact.id)).filter(Boolean));
-                const existingProfileUpdates = contacts.filter((contact) => existingIds.has(normalizeContactIdValue(contact.id)));
-                if (!existingProfileUpdates.length) {
-                    void hydrateVisibleContactHistories(state.contacts);
-                    return;
-                }
-                const beforeHash = snapshotHash({ contacts: state.contacts });
-                state.contacts = mergeContacts(state.contacts, existingProfileUpdates);
-                hydrateContactsFromConversations();
-                if (snapshotHash({ contacts: state.contacts }) !== beforeHash) {
-                    persistLocalSnapshot();
-                    scheduleSyncPush(100);
-                }
-                void hydrateVisibleContactHistories(state.contacts);
-                render();
-                return;
-            }
             const beforeHash = snapshotHash({ contacts: state.contacts });
             state.contacts = mergeContacts(state.contacts, contacts);
             hydrateContactsFromConversations();
@@ -6852,32 +5745,13 @@
             const data = await resp.json().catch(() => ({}));
             const contacts = (Array.isArray(data?.agents) ? data.agents : [])
                 .map(messageAgentToContact)
-                .filter(Boolean)
-                .filter((contact) => !isDeletedContactId(contact.id));
+                .filter(Boolean);
             console.info('[murmur] message agents loaded', contacts.map((contact) => ({
                 id: contact.id,
                 lastMessage: contact.lastMessage,
                 count: contact.messageCount || 0,
             })));
             if (!contacts.length) return;
-            if (state.contactSyncAuthoritative && contactsHaveRealData(state.contacts)) {
-                const existingIds = new Set(state.contacts.map((contact) => normalizeContactIdValue(contact.id)).filter(Boolean));
-                const existingRecovered = contacts.filter((contact) => existingIds.has(normalizeContactIdValue(contact.id)));
-                if (!existingRecovered.length) {
-                    void hydrateVisibleContactHistories(state.contacts);
-                    return;
-                }
-                const beforeHash = snapshotHash({ contacts: state.contacts });
-                state.contacts = mergeContacts(state.contacts, existingRecovered);
-                hydrateContactsFromConversations();
-                if (snapshotHash({ contacts: state.contacts }) !== beforeHash) {
-                    persistLocalSnapshot();
-                    scheduleSyncPush(100);
-                }
-                void hydrateVisibleContactHistories(state.contacts);
-                render();
-                return;
-            }
             const beforeHash = snapshotHash({ contacts: state.contacts });
             state.contacts = mergeContacts(state.contacts, contacts);
             hydrateContactsFromConversations();
@@ -6899,7 +5773,7 @@
         const probeIds = Array.from(new Set([
             ...CONTACTS.map((contact) => normalizeNewContactAgentId(contact.id)).filter(Boolean),
             ...state.contacts.map((contact) => normalizeNewContactAgentId(contact.id)).filter(Boolean),
-        ])).filter((agentId) => !isDeletedContactId(agentId));
+        ]));
         const recovered = [];
         for (const agentId of probeIds) {
             if (!agentId) continue;
@@ -6922,17 +5796,13 @@
                 if (!silent) console.warn('[murmur] message probe failed', agentId, error);
             }
         }
-        const contacts = recovered.filter(Boolean).filter((contact) => !isDeletedContactId(contact.id));
+        const contacts = recovered.filter(Boolean);
         console.info('[murmur] message agents probed', contacts.map((contact) => ({
             id: contact.id,
             lastMessage: contact.lastMessage,
             count: contact.messageCount || 0,
         })));
         if (!contacts.length) return;
-        if (state.contactSyncAuthoritative && contactsHaveRealData(state.contacts)) {
-            void hydrateVisibleContactHistories(state.contacts);
-            return;
-        }
         const beforeHash = snapshotHash({ contacts: state.contacts });
         state.contacts = mergeContacts(state.contacts, contacts);
         hydrateContactsFromConversations();
@@ -7005,64 +5875,19 @@
         let thinking = '';
         try {
             const obj = JSON.parse(payload);
-            const firstChoice = Array.isArray(obj?.choices) ? (obj.choices[0] || {}) : {};
-            const deltaObj = firstChoice.delta && typeof firstChoice.delta === 'object'
-                ? firstChoice.delta
-                : (obj.delta && typeof obj.delta === 'object' ? obj.delta : {});
-            const messageObj = firstChoice.message && typeof firstChoice.message === 'object' ? firstChoice.message : {};
-            const outputObj = obj.output && typeof obj.output === 'object' ? obj.output : {};
-            const pickText = (...sources) => {
-                for (const source of sources) {
-                    if (!source || typeof source !== 'object') continue;
-                    const value = source.content ?? source.text ?? source.delta ?? source.output_text;
-                    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
-                    if (Array.isArray(value)) {
-                        const joined = value.map((item) => {
-                            if (typeof item === 'string') return item;
-                            if (item && typeof item === 'object') return item.text ?? item.content ?? '';
-                            return '';
-                        }).join('');
-                        if (joined) return joined;
-                    }
-                }
-                return '';
-            };
-            const pickThinking = (...sources) => {
-                for (const source of sources) {
-                    if (!source || typeof source !== 'object') continue;
-                    const value = source.thinking
-                        ?? source.reasoning
-                        ?? source.reasoning_content
-                        ?? source.reasoningContent
-                        ?? source.reasoning_delta
-                        ?? source.reasoningDelta
-                        ?? source.thought
-                        ?? source.cot;
-                    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
-                    if (Array.isArray(value)) {
-                        const joined = value.map((item) => {
-                            if (typeof item === 'string') return item;
-                            if (item && typeof item === 'object') return item.text ?? item.content ?? item.summary ?? '';
-                            return '';
-                        }).join('');
-                        if (joined) return joined;
-                    }
-                }
-                return '';
-            };
             const isThinkingEvent = /^(thinking|reasoning|reason|thought|cot|inner_thought)$/i.test(eventType);
             const isChatEvent    = /^(chat|message|content|text|assistant|reply|response|output)$/i.test(eventType);
             if (isThinkingEvent) {
-                thinking = pickThinking(obj, deltaObj, messageObj, outputObj) || pickText(obj, deltaObj, messageObj, outputObj);
+                thinking = obj.thinking ?? obj.reasoning ?? obj.reasoning_content ?? obj.reasoningContent ?? obj.content ?? obj.text ?? obj.delta ?? '';
             } else if (isChatEvent) {
                 // event type says this is regular reply 鈥?only take content/delta/text
-                text    = pickText(obj, deltaObj, messageObj, outputObj);
+                text    = obj.content ?? obj.text ?? obj.delta ?? '';
                 // still allow explicit thinking fields inside a chat event
-                thinking = pickThinking(obj, deltaObj, messageObj, outputObj);
+                thinking = obj.thinking ?? obj.reasoning ?? obj.reasoning_content ?? obj.reasoningContent ?? '';
             } else {
                 // no event type: fall back to field-name heuristic
-                text    = pickText(obj, deltaObj, messageObj, outputObj);
-                thinking = pickThinking(obj, deltaObj, messageObj, outputObj);
+                text    = obj.content ?? obj.text ?? obj.delta ?? '';
+                thinking = obj.thinking ?? obj.reasoning ?? obj.reasoning_content ?? obj.reasoningContent ?? '';
             }
         } catch {
             if (/^(thinking|reasoning|reason|thought|cot|inner_thought)$/i.test(eventType)) {
@@ -7079,19 +5904,10 @@
                 if (obj2.name) toolCall = { name: String(obj2.name), status: String(obj2.status || 'done') };
             } catch { /* ignore */ }
         }
-        let voice = null;
-        if (/^voice$/i.test(eventType)) {
-            try {
-                const vobj = JSON.parse(payload);
-                if (vobj.audioUrl) voice = { audioUrl: String(vobj.audioUrl), mimeType: String(vobj.mimeType || 'audio/mpeg') };
-                else if (vobj.error) voice = { error: String(vobj.error) };
-            } catch { /* ignore */ }
-        }
         return {
             text: coerceSseText(text),
             thinking: coerceSseText(thinking),
             toolCall,
-            voice,
         };
     }
 
@@ -7171,7 +5987,7 @@
 
     async function doSendRpMessage() {
         const input = root()?.querySelector('.chat-input');
-        const text = getChatInputText(input).trim();
+        const text = input?.value?.trim();
         if (!text || !state.currentRpRoomId) return;
         const c = byId(state.currentContactId) || state.contacts[0];
         const room = getCurrentRpRoom();
@@ -7180,8 +5996,7 @@
 
         const userId = `rp_u_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         upsertMessage(state.currentRpMessages, { id: userId, client_message_id: userId, role: 'user', text, content: text, time: nowTimeStr(), timestamp: new Date().toISOString(), created_at: new Date().toISOString() });
-        setChatInputText(input, '');
-        resetChatInputDraftState();
+        input.value = '';
         const aiId = 'rp_ai_' + Date.now();
         state.currentRpMessages.push({ id: aiId, role: 'ai', text: '', content: '', time: '', created_at: new Date().toISOString(), typing: true });
         if (state.currentRpRoomId) state.rpMessages[state.currentRpRoomId] = state.currentRpMessages.map(normalizeStoredMessage);
@@ -7233,7 +6048,7 @@
                     const parsed = parseChatSsePayload(payload, currentEventType);
                     let chunk = parsed.text;
                     const normalizedThinkingChunk = normalizeThinkingChunk(parsed.thinking, fullText, fullThinking);
-                    const thinkingChunk = normalizedThinkingChunk;
+                    const thinkingChunk = allowReasoning ? normalizedThinkingChunk : '';
                     if (thinkingChunk && fullThinking.length < THINKING_MAX_ACCUMULATE) {
                         fullThinking = appendThinkingChunk(fullThinking, thinkingChunk);
                     }
@@ -7245,7 +6060,7 @@
                             role: 'ai',
                             text: fullText,
                             content: fullText,
-                            ...(fullThinking ? { thinking: fullThinking } : {}),
+                            ...(allowReasoning && fullThinking ? { thinking: fullThinking } : {}),
                             time: nowTimeStr(),
                             typing: false,
                             streaming: true,
@@ -7262,7 +6077,7 @@
                     ...state.currentRpMessages[idx],
                     text: fullText,
                     content: fullText,
-                    ...(fullThinking ? { thinking: fullThinking } : {}),
+                    ...(allowReasoning && fullThinking ? { thinking: fullThinking } : {}),
                     streaming: false,
                     typing: false,
                     time: nowTimeStr(),
@@ -7322,7 +6137,7 @@
 
     async function doSendCCMessage() {
         const input = root()?.querySelector('.chat-input');
-        const rawText = getChatInputText(input).trim();
+        const rawText = input?.value?.trim() || '';
         const attachments = (state.chatAttachments || []).map(serializeChatAttachment).filter(Boolean);
         if (!rawText && !attachments.length) return;
         const text = attachmentRequestText(rawText, attachments);
@@ -7331,11 +6146,10 @@
         cancelAssistantPlayback();
 
         const msgId = `u_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        upsertMessage(c.messages, { id: msgId, client_message_id: msgId, agent_id: c.id, role: 'user', text: rawText, content: rawText, attachments, time: nowTimeStr(), created_at: new Date().toISOString() });
+        upsertMessage(c.messages, { id: msgId, client_message_id: msgId, role: 'user', text: rawText, content: rawText, attachments, time: nowTimeStr(), created_at: new Date().toISOString() });
         c.lastMessage = attachmentLastMessage(rawText, attachments);
         c.lastTime = '刚刚';
-        setChatInputText(input, '');
-        resetChatInputDraftState();
+        input.value = '';
         state.chatAttachments = [];
 
         const aiId = 'ai_' + Date.now();
@@ -7347,9 +6161,7 @@
             time: '',
             created_at: new Date().toISOString(),
             typing: true,
-            agent_id: c.id,
             source: 'claude-code',
-            provider: 'claude-code',
         });
 
         syncConversationsFromContacts();
@@ -7362,114 +6174,52 @@
         render();
 
         try {
-            const body = {
-                conversation_key: `yui:${c.id}`,
-                agent_id: c.id,
-                content: text,
-                client_message_id: msgId,
-                reset: false,
-            };
-            const resp = await requestChatStream(c, body, abortCtrl.signal, '/api/claude-code/chat/stream');
-            const aiIdx = () => c.messages.findIndex((m) => m.id === aiId);
-            if (aiIdx() !== -1) {
-                c.messages[aiIdx()] = {
-                    id: aiId,
-                    role: 'ai',
-                    text: '',
-                    content: '',
-                    time: nowTimeStr(),
-                    created_at: new Date().toISOString(),
-                    typing: false,
-                    streaming: true,
+            const resp = await fetch(`${API_BASE}/api/claude-code/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    conversation_key: `yui:${c.id}`,
                     agent_id: c.id,
+                    content: text,
+                    client_message_id: msgId,
+                    reset: false,
+                }),
+                signal: abortCtrl.signal,
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(data.detail || `HTTP ${resp.status}`);
+
+            const reply = String(data.reply || '').trim();
+            const persistedUser = data.user_message && typeof data.user_message === 'object'
+                ? murmurHistoryMessageToStored(data.user_message, c.id)
+                : null;
+            const persistedAssistant = data.assistant_message && typeof data.assistant_message === 'object'
+                ? {
+                    ...murmurHistoryMessageToStored(data.assistant_message, c.id),
                     source: 'claude-code',
                     provider: 'claude-code',
-                };
-                render();
-            }
-
-            const reader = resp.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let currentEventType = '';
-            let fullText = '';
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-                const parts = buffer.split('\n');
-                buffer = parts.pop() ?? '';
-                for (const line of parts) {
-                    const trimmed = line.trim();
-                    if (!trimmed) {
-                        currentEventType = '';
-                        continue;
-                    }
-                    if (trimmed.startsWith('event:')) {
-                        currentEventType = trimmed.slice(6).trim();
-                        continue;
-                    }
-                    if (!trimmed.startsWith('data:')) continue;
-                    const payload = trimmed.slice(5).trim();
-                    if (payload === '[DONE]') continue;
-                    if (/^error$/i.test(currentEventType)) {
-                        throw new Error(payload || 'Claude Code stream failed');
-                    }
-                    const parsed = parseChatSsePayload(payload, currentEventType);
-                    const chunk = parsed.text;
-                    if (!chunk) continue;
-                    fullText += chunk;
-                    const idx = aiIdx();
-                    if (idx !== -1) {
-                        c.messages[idx] = {
-                            ...c.messages[idx],
-                            text: fullText,
-                            content: fullText,
-                            time: nowTimeStr(),
-                            typing: false,
-                            streaming: true,
-                            agent_id: c.id,
-                            source: 'claude-code',
-                            provider: 'claude-code',
-                        };
-                        patchStreamingMessageDom(aiId, fullText, '');
-                    }
                 }
+                : null;
+            const userIdx = c.messages.findIndex((m) => m.id === msgId);
+            if (userIdx !== -1 && persistedUser) {
+                c.messages[userIdx] = contactMessageFromStored({ ...persistedUser, content: rawText, text: rawText, attachments, client_message_id: msgId });
             }
-
-            const reply = fullText.trim();
-            const idx = aiIdx();
+            const idx = c.messages.findIndex((m) => m.id === aiId);
             if (idx !== -1 && reply) {
-                const chunks = splitAssistantReply(reply);
-                if (chunks.length > 1) {
-                    removeMessageFromContact(c, aiId);
-                    render();
-                    scrollToBottom();
-                    await wait(120);
-                    await playAssistantChunks(c, chunks, {
-                        startIndex: idx,
-                        baseId: aiId,
-                        agentId: c.id,
-                        source: 'claude-code',
-                        provider: 'claude-code',
-                    });
-                } else {
-                    c.messages[idx] = {
-                        id: aiId,
-                        role: 'ai',
-                        text: normalizeBubbleText(reply),
-                        content: normalizeBubbleText(reply),
-                        agent_id: c.id,
-                        source: 'claude-code',
-                        provider: 'claude-code',
-                        time: nowTimeStr(),
-                        created_at: c.messages[idx]?.created_at || new Date().toISOString(),
-                        typing: false,
-                    };
-                }
+                c.messages[idx] = {
+                    ...(persistedAssistant ? contactMessageFromStored(persistedAssistant) : {}),
+                    id: persistedAssistant?.id || aiId,
+                    role: 'ai',
+                    text: reply,
+                    content: reply,
+                    source: 'claude-code',
+                    provider: 'claude-code',
+                    time: persistedAssistant?.time || nowTimeStr(),
+                    created_at: persistedAssistant?.created_at || new Date().toISOString(),
+                    typing: false,
+                };
             } else if (idx !== -1) {
-                removeMessageFromContact(c, aiId);
+                c.messages.splice(idx, 1);
             }
             c.lastMessage = reply || text;
             c.lastTime = nowTimeStr();
@@ -7478,90 +6228,13 @@
             render();
             scrollToBottom();
         } catch (err) {
-            const streamFailedBeforeText = !String(c.messages.find((m) => m.id === aiId)?.text || '').trim();
-            if (!err?.name?.includes('Abort') && streamFailedBeforeText) {
-                try {
-                    const resp = await fetch(`${API_BASE}/api/claude-code/chat`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            conversation_key: `yui:${c.id}`,
-                            agent_id: c.id,
-                            content: text,
-                            client_message_id: msgId,
-                            reset: false,
-                        }),
-                        signal: abortCtrl.signal,
-                    });
-                    const data = await resp.json().catch(() => ({}));
-                    if (!resp.ok) throw new Error(data.detail || `HTTP ${resp.status}`);
-
-                    const reply = String(data.reply || '').trim();
-                    const persistedUser = data.user_message && typeof data.user_message === 'object'
-                        ? murmurHistoryMessageToStored(data.user_message, c.id)
-                        : null;
-                    const persistedAssistant = data.assistant_message && typeof data.assistant_message === 'object'
-                        ? {
-                            ...murmurHistoryMessageToStored(data.assistant_message, c.id),
-                            source: 'claude-code',
-                            provider: 'claude-code',
-                        }
-                        : null;
-                    const userIdx = c.messages.findIndex((m) => m.id === msgId);
-                    if (userIdx !== -1 && persistedUser) {
-                        c.messages[userIdx] = contactMessageFromStored({ ...persistedUser, content: rawText, text: rawText, attachments, client_message_id: msgId });
-                    }
-                    const idx = c.messages.findIndex((m) => m.id === aiId);
-                    if (idx !== -1 && reply) {
-                        const chunks = splitAssistantReply(reply);
-                        if (chunks.length > 1) {
-                            removeMessageFromContact(c, aiId);
-                            render();
-                            scrollToBottom();
-                            await wait(120);
-                            await playAssistantChunks(c, chunks, {
-                                startIndex: idx,
-                                baseId: persistedAssistant?.id || aiId,
-                                agentId: c.id,
-                                source: 'claude-code',
-                                provider: 'claude-code',
-                            });
-                        } else {
-                            c.messages[idx] = {
-                                ...(persistedAssistant ? contactMessageFromStored(persistedAssistant) : {}),
-                                id: persistedAssistant?.id || aiId,
-                                role: 'ai',
-                                text: normalizeBubbleText(reply),
-                                content: normalizeBubbleText(reply),
-                                agent_id: c.id,
-                                source: 'claude-code',
-                                provider: 'claude-code',
-                                time: persistedAssistant?.time || nowTimeStr(),
-                                created_at: persistedAssistant?.created_at || new Date().toISOString(),
-                                typing: false,
-                            };
-                        }
-                    } else if (idx !== -1) {
-                        removeMessageFromContact(c, aiId);
-                    }
-                    c.lastMessage = reply || text;
-                    c.lastTime = nowTimeStr();
-                    syncConversationsFromContacts();
-                    queueLocalSyncIfChanged(120);
-                    render();
-                    scrollToBottom();
-                    return;
-                } catch (fallbackErr) {
-                    err = fallbackErr;
-                }
-            }
             const wasAborted = err.name === 'AbortError';
             if (!wasAborted) console.error('[cc chat] error:', err);
             const idx = c.messages.findIndex((m) => m.id === aiId);
             if (idx !== -1) {
                 const textOut = wasAborted ? '' : `Claude Code 连接失败：${err.message}`;
                 if (!textOut) {
-                    removeMessageFromContact(c, aiId);
+                    c.messages.splice(idx, 1);
                 } else {
                     c.messages[idx] = {
                     id: aiId,
@@ -7587,7 +6260,7 @@
 
     async function doSendCodexMessage() {
         const input = root()?.querySelector('.chat-input');
-        const rawText = getChatInputText(input).trim();
+        const rawText = input?.value?.trim() || '';
         const attachments = (state.chatAttachments || []).map(serializeChatAttachment).filter(Boolean);
         if (!rawText && !attachments.length) return;
         const text = attachmentRequestText(rawText, attachments);
@@ -7596,11 +6269,10 @@
         cancelAssistantPlayback();
 
         const msgId = `u_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        upsertMessage(c.messages, { id: msgId, client_message_id: msgId, agent_id: c.id, role: 'user', text: rawText, content: rawText, attachments, time: nowTimeStr(), created_at: new Date().toISOString() });
+        upsertMessage(c.messages, { id: msgId, client_message_id: msgId, role: 'user', text: rawText, content: rawText, attachments, time: nowTimeStr(), created_at: new Date().toISOString() });
         c.lastMessage = attachmentLastMessage(rawText, attachments);
         c.lastTime = '\u521a\u521a';
-        setChatInputText(input, '');
-        resetChatInputDraftState();
+        input.value = '';
         state.chatAttachments = [];
 
         const aiId = 'ai_' + Date.now();
@@ -7612,9 +6284,7 @@
             time: '',
             created_at: new Date().toISOString(),
             typing: true,
-            agent_id: c.id,
             source: 'codex',
-            provider: 'codex',
         });
 
         syncConversationsFromContacts();
@@ -7659,36 +6329,20 @@
             }
             const idx = c.messages.findIndex((m) => m.id === aiId);
             if (idx !== -1 && reply) {
-                const chunks = splitAssistantReply(reply);
-                if (chunks.length > 1) {
-                    removeMessageFromContact(c, aiId);
-                    render();
-                    scrollToBottom();
-                    await wait(120);
-                    await playAssistantChunks(c, chunks, {
-                        startIndex: idx,
-                        baseId: persistedAssistant?.id || aiId,
-                        agentId: c.id,
-                        source: 'codex',
-                        provider: 'codex',
-                    });
-                } else {
-                    c.messages[idx] = {
-                        ...(persistedAssistant ? contactMessageFromStored(persistedAssistant) : {}),
-                        id: persistedAssistant?.id || aiId,
-                        role: 'ai',
-                        text: normalizeBubbleText(reply),
-                        content: normalizeBubbleText(reply),
-                        agent_id: c.id,
-                        source: 'codex',
-                        provider: 'codex',
-                        time: persistedAssistant?.time || nowTimeStr(),
-                        created_at: persistedAssistant?.created_at || new Date().toISOString(),
-                        typing: false,
-                    };
-                }
+                c.messages[idx] = {
+                    ...(persistedAssistant ? contactMessageFromStored(persistedAssistant) : {}),
+                    id: persistedAssistant?.id || aiId,
+                    role: 'ai',
+                    text: reply,
+                    content: reply,
+                    source: 'codex',
+                    provider: 'codex',
+                    time: persistedAssistant?.time || nowTimeStr(),
+                    created_at: persistedAssistant?.created_at || new Date().toISOString(),
+                    typing: false,
+                };
             } else if (idx !== -1) {
-                removeMessageFromContact(c, aiId);
+                c.messages.splice(idx, 1);
             }
             c.lastMessage = reply || text;
             c.lastTime = nowTimeStr();
@@ -7703,7 +6357,7 @@
             if (idx !== -1) {
                 const textOut = wasAborted ? '' : `Codex \u8fde\u63a5\u5931\u8d25\uff1a${err.message}`;
                 if (!textOut) {
-                    removeMessageFromContact(c, aiId);
+                    c.messages.splice(idx, 1);
                 } else {
                     c.messages[idx] = {
                     id: aiId,
@@ -7745,23 +6399,16 @@
         const c = byId(contactId);
         if (!c) return;
         const allowReasoning = !!c?.settings?.reasoning_visibility;
-        const aiId = buf.aiId || 'ai_' + Date.now();
 
         let sessionId = '';
-        try {
-            sessionId = await ensureContactSession(c);
-        } catch (err) {
-            removeMessageFromContact(c, aiId);
-            render();
-            return;
-        }
+        try { sessionId = await ensureContactSession(c); } catch (err) { return; }
 
         const text = texts.join('\n');
         const msgId = `u_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-        if (!c.messages.some((message) => message.id === aiId)) {
-            c.messages.push({ id: aiId, role: 'ai', text: '', content: '', time: '', created_at: new Date().toISOString(), typing: true, transient: true });
-        }
+        // Push AI typing placeholder
+        const aiId = 'ai_' + Date.now();
+        c.messages.push({ id: aiId, role: 'ai', text: '', content: '', time: '', created_at: new Date().toISOString(), typing: true });
         syncConversationsFromContacts();
         queueLocalSyncIfChanged(120);
         render();
@@ -7830,7 +6477,7 @@
 
             // Switch placeholder to streaming mode (no longer shows dots)
             const aiIdx = () => c.messages.findIndex(m => m.id === aiId);
-            c.messages[aiIdx()] = { id: aiId, role: 'ai', text: '', content: '', time: nowTimeStr(), created_at: new Date().toISOString(), typing: false, streaming: true, transient: true };
+            c.messages[aiIdx()] = { id: aiId, role: 'ai', text: '', content: '', time: nowTimeStr(), created_at: new Date().toISOString(), typing: false, streaming: true };
             render();
 
             const reader = resp.body.getReader();
@@ -7863,7 +6510,7 @@
                     const parsed = parseChatSsePayload(payload, _currentEventType);
                     let chunk = parsed.text;
                     const normalizedThinkingChunk = normalizeThinkingChunk(parsed.thinking, fullText, fullThinking);
-                    const thinkingChunk = normalizedThinkingChunk;
+                    const thinkingChunk = allowReasoning ? normalizedThinkingChunk : '';
 
                     if (thinkingChunk) {
                         // Hard cap: stop accumulating beyond limit (discard excess chunks)
@@ -7876,7 +6523,7 @@
                             c.messages[idx] = {
                                 id: aiId, role: 'ai', text: deferAssistantTextUntilChunked ? '' : fullText,
                                 thinking: fullThinking, time: nowTimeStr(),
-                                typing: false, streaming: true, transient: true,
+                                typing: false, streaming: true,
                             };
                             if (!_thinkingFirstRendered) {
                                 _thinkingFirstRendered = true;
@@ -7905,66 +6552,25 @@
                         }
                     }
 
-                    if (parsed.voice && (parsed.voice.audioUrl || parsed.voice.error)) {
-                        // AI 调 voice.speak 发来的音频：挂到当前消息上，渲染成语音条（文字默认收起）
-                        const idxV = aiIdx();
-                        if (idxV !== -1) {
-                            c.messages[idxV] = parsed.voice.audioUrl
-                                ? { ...c.messages[idxV], voiceUrl: parsed.voice.audioUrl, voiceError: '', voiceShowText: false, streaming: true }
-                                : { ...c.messages[idxV], voiceLoading: false, voiceError: parsed.voice.error, streaming: true };
-                            render();
-                        }
-                    }
-
                     if (chunk) {
                         fullText += chunk;
-                        const inlineSplit = splitInlineReasoningReply(fullText);
-                        const visibleText = inlineSplit.visible;
-                        const visibleThinking = joinThinkingParts(fullThinking, inlineSplit.thinking);
-                        if (deferAssistantTextUntilChunked) {
-                            const idx3 = aiIdx();
-                            if (idx3 !== -1 && visibleThinking) {
-                                c.messages[idx3] = {
-                                    ...c.messages[idx3],
-                                    text: '',
-                                    content: '',
-                                    thinking: visibleThinking,
-                                    time: nowTimeStr(),
-                                    typing: false,
-                                    streaming: true,
-                                    transient: true,
-                                };
-                                _thinkingFirstRendered = true;
-                                state.openThinkingIds[aiId] = true;
-                                render();
-                                scrollToBottom();
-                            }
-                        } else {
+                        if (!deferAssistantTextUntilChunked) {
                             const idx3 = aiIdx();
                             if (idx3 !== -1) {
                                 c.messages[idx3] = {
                                     ...c.messages[idx3],
-                                    text: visibleText,
-                                    content: visibleText,
-                                    ...(visibleThinking ? { thinking: visibleThinking } : {}),
+                                    text: fullText,
+                                    content: fullText,
                                     time: nowTimeStr(),
                                     typing: false,
                                     streaming: true,
-                                    transient: true,
                                 };
-                                if (!visibleText) {
-                                    if (visibleThinking) {
-                                        _thinkingFirstRendered = true;
-                                        state.openThinkingIds[aiId] = true;
-                                        render();
-                                        scrollToBottom();
-                                    }
-                                } else if (!_textFirstRendered) {
+                                if (!_textFirstRendered) {
                                     _textFirstRendered = true;
                                     render();
                                     scrollToBottom();
                                 } else {
-                                    patchStreamingMessageDom(aiId, visibleText, visibleThinking);
+                                    patchStreamingMessageDom(aiId, fullText, fullThinking);
                                 }
                             }
                         }
@@ -7983,62 +6589,42 @@
             _cancelThinkingFlush();
             state.streamingAbortController = null;
             const idx = aiIdx();
-            const finalSplit = splitInlineReasoningReply(fullText, { final: true });
-            const finalText = (finalSplit.visible || fullText).trim();
-            const finalThinking = joinThinkingParts(fullThinking, finalSplit.thinking);
+            const finalText = fullText.trim();
             c.lastMessage = finalText || '\u5df2\u5904\u7406';
             c.lastTime = nowTimeStr();
             const thinkEl = root()?.querySelector(`#thinking-${aiId}`);
             if (thinkEl) thinkEl.classList.remove('thinking-active');
             const wrapperEl = root()?.querySelector(`#cot-wrapper-${aiId}`);
             if (wrapperEl) wrapperEl.removeAttribute('data-slow');
-            if (finalThinking) {
+            if (allowReasoning && fullThinking) {
                 delete state.openThinkingIds[aiId];
             }
-            // 保留流式期间挂上的语音（AI 调 voice.speak 发来的音频）
-            const voiceUrlFinal = idx !== -1 ? (c.messages[idx]?.voiceUrl || '') : '';
             const chunks = splitAssistantReply(finalText);
-            if (idx !== -1 && chunks.length > 1 && !voiceUrlFinal) {
-                removeMessageFromContact(c, aiId);
+            if (idx !== -1 && chunks.length > 1) {
+                c.messages.splice(idx, 1);
                 render();
                 scrollToBottom();
                 await wait(180);
-                await playAssistantChunks(c, chunks, {
+                await playAssistantChunks(c, chunks, { 
                     startIndex: idx,
-                    thinking: finalThinking,
+                    thinking: allowReasoning ? fullThinking : '',
                     toolCalls: fullToolCalls
                 });
             } else {
-                if (idx !== -1 && (finalText || voiceUrlFinal)) {
+                if (idx !== -1 && finalText) {
                     c.messages[idx] = {
                         id: aiId,
                         role: 'ai',
                         text: finalText,
                         content: finalText,
-                        ...(finalThinking ? { thinking: finalThinking } : {}),
+                        ...(allowReasoning && fullThinking ? { thinking: fullThinking } : {}),
                         ...(fullToolCalls ? { toolCalls: fullToolCalls } : {}),
-                        ...(voiceUrlFinal ? { voiceUrl: voiceUrlFinal, voiceShowText: false } : {}),
                         time: nowTimeStr(),
                         created_at: new Date().toISOString(),
                         typing: false,
                     };
-                } else if (idx !== -1 && finalThinking) {
-                    c.messages[idx] = {
-                        id: aiId,
-                        role: 'ai',
-                        text: '',
-                        content: '',
-                        thinking: finalThinking,
-                        time: nowTimeStr(),
-                        created_at: new Date().toISOString(),
-                        typing: false,
-                    };
-                    syncConversationsFromContacts();
-                    queueLocalSyncIfChanged(120);
-                    render();
-                    scrollToBottom();
                 } else if (idx !== -1) {
-                    removeMessageFromContact(c, aiId);
+                    c.messages.splice(idx, 1);
                 }
                 syncConversationsFromContacts();
                 queueLocalSyncIfChanged(120);
@@ -8059,13 +6645,13 @@
                     ? fullText.trim()
                     : `\u8fde\u63a5\u5931\u8d25\uff1a${err.message}\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002`;
                 if (!textOut) {
-                    removeMessageFromContact(c, aiId);
+                    c.messages.splice(idx, 1);
                 } else {
                     c.messages[idx] = {
                     id: aiId, role: 'ai',
                     text: textOut,
                     content: textOut,
-                    ...(fullThinking ? { thinking: fullThinking } : {}),
+                    ...(allowReasoning && fullThinking ? { thinking: fullThinking } : {}),
                     time: nowTimeStr(), created_at: new Date().toISOString(), typing: false,
                 };
                 }
@@ -8083,7 +6669,7 @@
     //  Send message (SSE streaming)
     async function doSendMessage() {
         const input = root()?.querySelector('.chat-input');
-        const rawText = getChatInputText(input).trim();
+        const rawText = input?.value?.trim() || '';
         const attachments = (state.chatAttachments || []).map(serializeChatAttachment).filter(Boolean);
         if (!rawText && !attachments.length) return;
         const requestText = attachmentRequestText(rawText, attachments);
@@ -8103,21 +6689,17 @@
         upsertMessage(c.messages, { id: uMsgId, client_message_id: uMsgId, session_id: sessionId, agent_id: c.id, role: 'user', text: rawText, content: rawText, attachments, time: nowTimeStr(), created_at: new Date().toISOString() });
         c.lastMessage = attachmentLastMessage(rawText, attachments);
         c.lastTime = '\u521a\u521a';
-        setChatInputText(input, '');
-        resetChatInputDraftState();
+        input.value = '';
         state.chatAttachments = [];
-        // Buffer: debounce AI request, extend timer while user is typing
-        if (!_chatMsgBuffers[c.id]) _chatMsgBuffers[c.id] = { texts: [], timer: null, listener: null };
-        const buf = _chatMsgBuffers[c.id];
-        buf.texts.push(requestText);
-        if (!buf.aiId) {
-            buf.aiId = 'ai_' + Date.now();
-            c.messages.push({ id: buf.aiId, role: 'ai', text: '', content: '', time: '', created_at: new Date().toISOString(), typing: true });
-        }
         syncConversationsFromContacts();
         queueLocalSyncIfChanged(120);
         render();
         scrollToBottom();
+
+        // Buffer: debounce AI request, extend timer while user is typing
+        if (!_chatMsgBuffers[c.id]) _chatMsgBuffers[c.id] = { texts: [], timer: null, listener: null };
+        const buf = _chatMsgBuffers[c.id];
+        buf.texts.push(requestText);
         if (buf.timer) clearTimeout(buf.timer);
         if (!buf.listener) {
             buf.listener = () => {
@@ -8241,7 +6823,7 @@
                     const parsed = parseChatSsePayload(payload, _rCurrentEventType);
                     let chunk = parsed.text;
                     const normalizedThinkingChunk = normalizeThinkingChunk(parsed.thinking, fullText, fullThinking);
-                    const thinkingChunk = normalizedThinkingChunk;
+                    const thinkingChunk = allowReasoning ? normalizedThinkingChunk : '';
                     if (thinkingChunk) {
                         if (fullThinking.length < THINKING_MAX_ACCUMULATE) {
                             fullThinking = appendThinkingChunk(fullThinking, thinkingChunk);
@@ -8304,12 +6886,12 @@
             }
             const chunks = splitAssistantReply(rerollText);
             if (curIdx !== -1 && chunks.length > 1) {
-                removeMessageFromContact(c, rerollId);
+                c.messages.splice(curIdx, 1);
                 render();
                 await wait(180);
                 await playAssistantChunks(c, chunks, {
                     startIndex: curIdx,
-                    thinking: fullThinking,
+                    thinking: allowReasoning ? fullThinking : '',
                     toolCalls: fullToolCalls,
                 });
             } else {
@@ -8317,12 +6899,12 @@
                     c.messages[curIdx] = {
                         ...c.messages[curIdx],
                         text: rerollText,
-                        ...(fullThinking ? { thinking: fullThinking } : {}),
+                        ...(allowReasoning && fullThinking ? { thinking: fullThinking } : {}),
                         ...(fullToolCalls ? { toolCalls: fullToolCalls } : {}),
                         streaming: false,
                     };
                 } else if (curIdx !== -1) {
-                    removeMessageFromContact(c, rerollId);
+                    c.messages.splice(curIdx, 1);
                 }
                 render();
             }
@@ -8337,7 +6919,7 @@
             if (curIdx !== -1) {
                 const textOut = wasAborted ? fullText.trim() : `\u91cd\u8bd5\u5931\u8d25\uff1a${err.message}`;
                 if (!textOut) {
-                    removeMessageFromContact(c, rerollId);
+                    c.messages.splice(curIdx, 1);
                 } else {
                     c.messages[curIdx] = {
                     ...c.messages[curIdx],
@@ -8451,6 +7033,8 @@
     state.aiSettingsSaving = false;
     state.memoryServiceEntries = Array.isArray(state.memoryServiceEntries) ? state.memoryServiceEntries : [];
     state.memoryServiceLoading = !!state.memoryServiceLoading;
+    state.memoryServiceView = state.memoryServiceView === 'map' ? 'map' : 'list';
+    state.memoryMapSelectedId = String(state.memoryMapSelectedId || '');
     state.slotVendorGroupOpen = (state.slotVendorGroupOpen && typeof state.slotVendorGroupOpen === 'object') ? state.slotVendorGroupOpen : {};
     state.providerModelVendorOpen = (state.providerModelVendorOpen && typeof state.providerModelVendorOpen === 'object') ? state.providerModelVendorOpen : {};
 
@@ -8971,8 +7555,6 @@
             { id: '\u5976\u6cb9\u674f', key: 'cream', desc: '\u6696\u8c03\u7c73\u767d' },
         ];
         const fullUiOptions = [
-            { id: 'claude', key: 'claude', name: '\u6696\u7eb8', desc: 'Claude \u00b7 \u8c61\u7259\u6696\u7eb8 \u00b7 \u5e72\u51c0\u7559\u767d' },
-            { id: 'claude-dark', key: 'claude-dark', name: '\u591c\u7eb8', desc: 'Claude \u00b7 \u70ad\u7eb8\u6697\u8272 \u00b7 \u7c73\u767d\u5b57' },
             { id: 'windowsill', key: 'windowsill', name: '\u7a97\u53f0', desc: '\u9f20\u5c3e\u8349\xb7\u9676\u571f\xb7\u4e9a\u9ebb \xb7 \u51b7\u9759\u5de5\u5177\u611f' },
             { id: 'tape', key: 'tape', name: '\u78c1\u5e26', desc: '\u78e8\u7802\u73bb\u7483\xb7\u9493\u8272\xb7\u7b49\u5bbd\u5b57 \xb7 \u8f6f\u4ef6\u8bda\u5b9e' },
         ];
@@ -9038,6 +7620,66 @@
         </span>`;
     }
 
+    function memoryMapMeta(item) {
+        const category = String(item.category || 'recent_pending').toLowerCase();
+        const palette = {
+            core_profile: '#b66e7c', deep: '#737d9b', ephemeral: '#b6905b', recent_pending: '#7d9b86',
+            fact: '#737d9b', taste: '#b66e7c', mood: '#b6905b', stance: '#7d9b86',
+            lore: '#826b9e', moment: '#c58674', ritual: '#82936b', intimate: '#b66e7c',
+            project: '#638a9a', creation: '#a27961',
+        };
+        return { category, color: palette[category] || '#8b8a94' };
+    }
+
+    function memoryMapWords(item) {
+        return String(item.tags || item.category || '')
+            .toLowerCase().split(/[\s,，;；|/]+/).map(word => word.trim()).filter(word => word.length > 1);
+    }
+
+    function memoryMapEdges(entries) {
+        const edges = [];
+        entries.forEach((left, leftIndex) => entries.slice(leftIndex + 1).forEach((right, offset) => {
+            const rightIndex = leftIndex + offset + 1;
+            const shared = memoryMapWords(left).filter(word => memoryMapWords(right).includes(word));
+            if (shared.length || String(left.category || '') === String(right.category || '')) {
+                edges.push({ leftIndex, rightIndex, strength: Math.min(3, shared.length + 1) });
+            }
+        }));
+        return edges.slice(0, 42);
+    }
+
+    function memoryMapPoint(index, total) {
+        const angle = (Math.PI * 2 * index / Math.max(total, 1)) - Math.PI / 2;
+        const ring = index < 7 ? 30 : 41;
+        return { x: 50 + Math.cos(angle) * ring, y: 50 + Math.sin(angle) * ring };
+    }
+
+    function renderMemoryMap(entries) {
+        const selected = entries.find(item => String(item.id || '') === state.memoryMapSelectedId) || entries[0];
+        const points = entries.map((_, index) => memoryMapPoint(index, entries.length));
+        const edges = memoryMapEdges(entries);
+        return `
+          <div class="memory-map" role="region" aria-label="记忆星图">
+            <svg class="memory-map-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              ${edges.map(edge => `<line x1="${points[edge.leftIndex].x}" y1="${points[edge.leftIndex].y}" x2="${points[edge.rightIndex].x}" y2="${points[edge.rightIndex].y}" class="memory-map-line strength-${edge.strength}" />`).join('')}
+            </svg>
+            ${entries.map((item, index) => {
+                const point = points[index];
+                const meta = memoryMapMeta(item);
+                const active = String(item.id || '') === String(selected?.id || '');
+                const size = Math.max(28, Math.min(47, 25 + Number(item.importance || 3) * 4 + Number(item.temperature || 0) * .12));
+                const label = String(item.compressed_content || item.raw_content || item.content || '未命名记忆').slice(0, 14);
+                return `<button class="memory-map-node${active ? ' active' : ''}" data-action="memory-map-select" data-memory-id="${escapeHtml(String(item.id || ''))}" style="--node-x:${point.x}%;--node-y:${point.y}%;--node-size:${size}px;--node-color:${meta.color};" title="${escapeHtml(label)}"><span>${escapeHtml(label)}</span></button>`;
+            }).join('')}
+          </div>
+          ${selected ? `
+            <div class="memory-map-detail">
+              <div><strong>${escapeHtml(selected.compressed_content || selected.raw_content || selected.content || '')}</strong><em>${escapeHtml(memoryMapMeta(selected).category)} · ${renderMemoryTempBar(selected.temperature ?? 0)}</em></div>
+              <div class="ai-inline-actions"><button class="ghost-action" data-action="memory-service-edit" data-memory-id="${escapeHtml(String(selected.id || ''))}">编辑</button><button class="ghost-action" data-action="memory-service-delete" data-memory-id="${escapeHtml(String(selected.id || ''))}">删除</button></div>
+            </div>` : ''}
+        `;
+    }
+
     function renderMemoryServicePage() {
         const contact = byId(state.currentContactId) || state.contacts[0];
         const entries = Array.isArray(state.memoryServiceEntries) ? state.memoryServiceEntries : [];
@@ -9060,12 +7702,17 @@
           <div class="ai-inline-actions" style="margin-top:8px;">
             ${SORTS.map(s => `<button class="ghost-action${sort === s.key ? ' active' : ''}" data-action="memory-service-sort" data-sort="${s.key}">${s.label}</button>`).join('')}
           </div>
+          <div class="memory-service-view-switch" role="group" aria-label="记忆视图">
+            <button class="ghost-action${state.memoryServiceView === 'list' ? ' active' : ''}" data-action="memory-service-view" data-view="list">列表</button>
+            <button class="ghost-action${state.memoryServiceView === 'map' ? ' active' : ''}" data-action="memory-service-view" data-view="map">星图</button>
+          </div>
         </div>
         <div class="settings-group glass-frost ai-panel compact-panel">
           <h3>记忆列表</h3>
           ${state.memoryServiceLoading ? '<p class="section-eyebrow">正在加载…</p>' : ''}
-          ${!state.memoryServiceLoading && !entries.length ? '<p class="section-eyebrow">这个角色还没有记忆。</p>' : ''}
-          ${entries.map((item) => {
+          ${!state.memoryServiceLoading && !entries.length ? '<p class="section-eyebrow">这个角色还没有正式记忆，星图暂时没有星星。</p>' : ''}
+          ${state.memoryServiceView === 'map' && entries.length ? renderMemoryMap(entries) : ''}
+          ${state.memoryServiceView !== 'map' ? entries.map((item) => {
             const text = item.compressed_content || item.raw_content || item.content || '未命名记忆';
             const imp = item.importance ?? 3;
             const temp = item.temperature ?? 0;
@@ -9087,7 +7734,7 @@
                 <button class="ghost-action" data-action="memory-service-delete" data-memory-id="${escapeHtml(memoryId)}" ${memoryId ? '' : 'disabled'}>删除</button>
               </div>
             </div>`;
-          }).join('')}
+          }).join('') : ''}
         </div>
         ${candidates.length > 0 ? `
         <div class="settings-group glass-frost ai-panel compact-panel">
@@ -9156,21 +7803,12 @@
     }
 
     async function dismissMemoryCandidate(candidateId) {
-        const agentId = currentMemoryServiceAgentId();
         try {
-            const resp = await fetch(`${API_BASE}/api/consciousness/memory-candidates/${encodeURIComponent(candidateId)}?agent_id=${encodeURIComponent(agentId)}`, { method: 'DELETE' });
-            if (!resp.ok && resp.status !== 404) throw new Error(`HTTP ${resp.status}`);
+            const resp = await fetch(`${API_BASE}/api/consciousness/memory-candidates/${encodeURIComponent(candidateId)}`, { method: 'DELETE' });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             state.memoryCandidates = (state.memoryCandidates || []).filter(c => String(c.id) !== String(candidateId));
-            state.toast = resp.status === 404 ? '候选已处理，已从列表移除' : '已忽略候选';
             render();
-            window.setTimeout(() => { state.toast = ''; render(); }, 1400);
-            await loadMemoryService(agentId, { silent: true });
-        } catch (e) {
-            console.warn('[memory] dismiss failed', e);
-            state.toast = '忽略失败，刷新后再试';
-            render();
-            window.setTimeout(() => { state.toast = ''; render(); }, 1400);
-        }
+        } catch (e) { console.warn('[memory] dismiss failed', e); }
     }
     function promptMemoryDraft(existing = null) {
         const base = existing || {};
@@ -9870,11 +8508,9 @@
         const syncStatus = state.providerModelSyncStatus?.[provider.id];
         const savedKeyMask = maskedApiKey(provider.apiKey || '');
         const keyIsDirty = !!provider._apiKeyDirty;
-        const keyInputValue = keyIsDirty
-            ? String(provider.apiKey || '')
-            : (state.providerKeyVisible && provider.apiKey ? String(provider.apiKey || '') : savedKeyMask);
-        const keyInputType = state.providerKeyVisible ? 'text' : (keyIsDirty ? 'password' : 'text');
-        const keyButtonText = state.providerKeyVisible ? '隐藏' : '显示';
+        const keyInputValue = keyIsDirty ? String(provider.apiKey || '') : savedKeyMask;
+        const keyInputType = keyIsDirty ? (state.providerKeyVisible ? 'text' : 'password') : 'text';
+        const keyButtonText = keyIsDirty ? (state.providerKeyVisible ? '隐藏' : '显示') : (savedKeyMask ? '更换' : '显示');
         return `
       <section class="settings-page page-block ai-settings-page provider-editor-page">
         <div class="settings-group glass-frost ai-panel provider-editor-card">
@@ -10139,6 +8775,16 @@
             loadMemoryService(state.currentContactId, { silent: true });
             return;
         }
+        if (action === 'memory-service-view') {
+            state.memoryServiceView = target.dataset.view === 'map' ? 'map' : 'list';
+            render();
+            return;
+        }
+        if (action === 'memory-map-select') {
+            state.memoryMapSelectedId = String(target.dataset.memoryId || '');
+            render();
+            return;
+        }
         if (action === 'memory-candidate-promote') { promoteMemoryCandidate(target.dataset.candidateId); return; }
         if (action === 'memory-candidate-dismiss') { dismissMemoryCandidate(target.dataset.candidateId); return; }
         if (action === 'memory-service-create') {
@@ -10216,9 +8862,7 @@
         if (action === 'sync-provider-models') { syncProviderModelsFromEditor(); return; }
         if (action === 'toggle-provider-key-visible') {
             const draft = ensureProviderEditorDraft();
-            if (draft.apiKey && !draft._apiKeyDirty) {
-                state.providerKeyVisible = !state.providerKeyVisible;
-            } else if (!draft._apiKeyDirty) {
+            if (!draft._apiKeyDirty) {
                 draft._apiKeyDirty = true;
                 draft.apiKey = '';
                 state.providerKeyVisible = true;
@@ -10448,8 +9092,6 @@
 
         if (action === 'pick-theme-mode') {
             state.globalSettings.theme = target.dataset.theme || state.globalSettings.theme;
-            // 用户显式选择主题，标记不再自动覆盖
-            try { localStorage.setItem(AUTO_THEME_KEY, '0'); } catch { /* ignore */ }
             render();
             saveAiSettings();
             return;
@@ -10790,29 +9432,8 @@
         }
     });
 
-    document.addEventListener('beforeinput', (event) => {
-        const target = event.target;
-        if (target?.id !== 'provider-key-input' || target.dataset?.masked !== 'true') return;
-        const draft = ensureProviderEditorDraft();
-        target.value = '';
-        target.dataset.masked = 'false';
-        target.type = 'text';
-        draft._apiKeyDirty = true;
-        draft.apiKey = '';
-        state.providerKeyVisible = true;
-    });
-
     document.addEventListener('paste', (event) => {
         const target = event.target;
-        if (target?.id !== 'provider-key-input') {
-            const input = getActiveChatInput(target);
-            const hasImage = clipboardImageFiles(event.clipboardData).length > 0;
-            const hasHtml = !!event.clipboardData?.getData('text/html');
-            if (input && (target?.closest?.('.chat-input') || hasImage || hasHtml)) {
-                handleChatInputPaste(event, input);
-                return;
-            }
-        }
         if (target?.id !== 'provider-key-input') return;
         event.preventDefault();
         const text = String(event.clipboardData?.getData('text/plain') || '').trim();
@@ -11274,11 +9895,12 @@
         }
         if (target?.id === 'provider-key-input' && target.dataset?.masked === 'true') {
             const draft = ensureProviderEditorDraft();
-            target.focus?.();
+            target.value = '';
             target.dataset.masked = 'false';
+            draft._apiKeyDirty = true;
+            draft.apiKey = '';
             state.providerKeyVisible = true;
             target.type = 'text';
-            target.value = draft.apiKey || '';
         }
     });
 
