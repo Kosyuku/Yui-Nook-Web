@@ -820,6 +820,7 @@ function PaperInput({ value, onChange, placeholder = "", multiline = false, auto
 
 function MemoryPanel({ memories, books, apiBase = "", agentNames = {}, onLoad }) {
   const [amberView, setAmberView] = useState("list");
+  const [constellationSelectedId, setConstellationSelectedId] = useState("");
   const [filter, setFilter] = useState("all");
   const [visibilityFilter, setVisibilityFilter] = useState("all");
   const [sort, setSort] = useState("newest");
@@ -996,6 +997,12 @@ function MemoryPanel({ memories, books, apiBase = "", agentNames = {}, onLoad })
 
       {amberView === "stats" ? (
         <section style={{ display: "flex", flexDirection: "column", padding: "6px 0 calc(env(safe-area-inset-bottom, 0px) + 80px)" }}>
+          <MemoryConstellation
+            memories={normalized}
+            agentNames={personNameById}
+            selectedId={constellationSelectedId}
+            onSelect={setConstellationSelectedId}
+          />
           <AmberModule title="联系链接" badge={stats.people.length}>
             {stats.people.length ? stats.people.map((person, index) => (
               <div key={person.id} style={{ ...amberLinkRowStyle, borderBottom: index === stats.people.length - 1 ? "none" : amberLinkRowStyle.borderBottom }}>
@@ -1115,7 +1122,65 @@ function normalizeAmberMemory(memory, index) {
     importance: Number(memory.importance || 0),
     temperature: Number(memory.temperature || 0),
     touch_count: Number(memory.touch_count || 0),
+    tags: String(memory.tags || memory.category || "").split(/[\s,，;；|/]+/).map((tag) => tag.trim()).filter(Boolean),
   };
+}
+
+function constellationScore(center, candidate) {
+  if (center.id === candidate.id) return -1;
+  let score = 0;
+  if (center.person === candidate.person) score += 2;
+  if (center.type === candidate.type) score += 3;
+  const sharedTags = center.tags.filter((tag) => candidate.tags.includes(tag));
+  score += sharedTags.length * 3;
+  const centerWords = String(center.summary || "").match(/[一-鿿]{2,}|[a-zA-Z]{3,}/g) || [];
+  const candidateText = String(candidate.summary || "").toLowerCase();
+  score += centerWords.filter((word) => candidateText.includes(word.toLowerCase())).length * 2;
+  return score;
+}
+
+function constellationColor(memory) {
+  const colors = { Core: "#bd7a87", Deep: "#7e91af", Recent: "#8aa486", Ephemeral: "#c89c6a" };
+  return colors[memory.type] || "#a387b7";
+}
+
+function MemoryConstellation({ memories, agentNames, selectedId, onSelect }) {
+  const center = memories.find((memory) => memory.id === selectedId)
+    || [...memories].sort((a, b) => (b.importance - a.importance) || (b.temperature - a.temperature) || new Date(b.dateISO || 0) - new Date(a.dateISO || 0))[0];
+  if (!center) return <AmberModule title="记忆星图"><p style={amberEmptyTextStyle}>还没有可连成星图的记忆</p></AmberModule>;
+
+  const related = memories
+    .filter((memory) => memory.id !== center.id)
+    .map((memory) => ({ memory, score: constellationScore(center, memory) }))
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score || b.memory.importance - a.memory.importance)
+    .slice(0, 6)
+    .map(({ memory }) => memory);
+  const positions = [[17, 21], [78, 17], [86, 58], [66, 84], [25, 78], [8, 51]];
+
+  return (
+    <AmberModule title="记忆星图" badge={related.length ? `关联 ${related.length}` : "独立"}>
+      <div style={{ padding: "8px 12px 14px" }}>
+        <div style={{ position: "relative", height: 238, overflow: "hidden", border: "0.5px solid rgba(190,174,200,.26)", background: "rgba(255,255,255,.48)" }}>
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+            {related.map((memory, index) => <line key={memory.id} x1="50" y1="50" x2={positions[index][0]} y2={positions[index][1]} stroke={constellationColor(memory)} strokeOpacity="0.38" strokeWidth="0.45" />)}
+          </svg>
+          {related.map((memory, index) => {
+            const [left, top] = positions[index];
+            return <button key={memory.id} type="button" onClick={() => onSelect(memory.id)} title={memory.summary} style={{ position: "absolute", left: `${left}%`, top: `${top}%`, width: 31, height: 31, transform: "translate(-50%, -50%)", borderRadius: "50%", border: `1px solid ${constellationColor(memory)}`, background: "rgba(255,255,255,.92)", boxShadow: "0 2px 8px rgba(80,60,90,.12)", cursor: "pointer", padding: 0 }} aria-label={`查看关联记忆：${memory.summary}`}><span style={{ display: "block", width: 9, height: 9, margin: "auto", borderRadius: "50%", background: constellationColor(memory) }} /></button>;
+          })}
+          <button type="button" onClick={() => onSelect(center.id)} title={center.summary} style={{ position: "absolute", left: "50%", top: "50%", width: 78, height: 78, transform: "translate(-50%, -50%)", borderRadius: "50%", border: `1px solid ${constellationColor(center)}`, background: "rgba(255,253,250,.98)", color: "#4f4743", boxShadow: `0 6px 18px ${constellationColor(center)}30`, cursor: "pointer", padding: "10px 8px", fontFamily: F.serifCn, fontSize: 11, lineHeight: 1.3, overflow: "hidden" }} aria-label={`当前中心记忆：${center.summary}`}>
+            <span style={{ display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{center.summary}</span>
+          </button>
+        </div>
+        <div style={{ padding: "11px 3px 2px", display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ fontSize: 10, color: "rgba(125,105,140,.62)", letterSpacing: "0.08em" }}>{agentNames.get(center.person) || center.agent_id} · {center.type} · 重要度 {center.importance || 0}</span>
+          <strong style={{ fontSize: 13, fontWeight: 500, color: "#4f4743", lineHeight: 1.5 }}>{center.summary}</strong>
+          <span style={{ fontSize: 11, color: "rgba(105,95,90,.65)" }}>{related.length ? "点周围的星点，换一条记忆当中心。" : "这条记忆暂时还没有足够明确的关联。"}</span>
+        </div>
+      </div>
+    </AmberModule>
+  );
 }
 
 function buildAmberStats(memories) {
