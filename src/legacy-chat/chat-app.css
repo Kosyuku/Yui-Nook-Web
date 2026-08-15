@@ -7411,3 +7411,37 @@ button.model-choice-item {
   color: var(--ac-main);
   font-weight: 600;
 }
+
+/* ── 霧藍·ARCANUM ───────────────────────────────────────────────────
+   暖纸/夜纸之外的第三档：冷调、通透、有水汽感。
+   参考那张 ARCANUM 截图 —— 天光偏蓝白，气泡几乎和背景融在一起，
+   靠很轻的阴影浮起来，而不是靠描边切出来。
+   ──────────────────────────────────────────────────────────────── */
+#chat-app-root[data-theme="arcanum"] {
+  --_bg:
+    radial-gradient(ellipse at 50% 0%, rgba(186,214,232,.42), transparent 58%),
+    radial-gradient(ellipse at 8% 96%, rgba(206,226,224,.34), transparent 52%),
+    linear-gradient(180deg, #eef5fa 0%, #e4eef4 100%);
+  --_sf-base: rgba(255,255,255,.94); --_sf-raised: rgba(255,255,255,.84); --_sf-veil: rgba(240,248,252,.74); --_sf-ghost: rgba(214,232,242,.52); --_sf-faint: rgba(120,160,186,.12); --_sf-hairline: rgba(58,92,116,.07);
+  --_tx-main: #33454f; --_tx-muted: rgba(51,69,79,.60); --_tx-faint: rgba(51,69,79,.40); --_tx-ink: #26363f; --_tx-on-accent: #ffffff;
+  --_bd-main: rgba(58,92,116,.11); --_bd-soft: rgba(58,92,116,.07); --_bd-strong: rgba(108,158,186,.28);
+  --_sd-sm: 0 1px 2px rgba(46,78,98,.06); --_sd-md: 0 2px 4px rgba(46,78,98,.06), 0 10px 26px -14px rgba(46,78,98,.28); --_sd-lg: 0 18px 38px rgba(46,78,98,.18);
+  --_ac-main: #6c9eba; --_ac-soft: rgba(108,158,186,.16); --_ac-on: #ffffff;
+  --_bubble-ai: rgba(255,255,255,.90); --_bubble-user: rgba(203,227,240,.88); --_input: rgba(255,255,255,.86); --_send: #6c9eba; --_dot: rgba(120,160,186,.14);
+}
+
+/* 和暖纸/夜纸一样，把几个大面积容器也接到 token 上 */
+#chat-app-root[data-theme="arcanum"] .settings-page,
+#chat-app-root[data-theme="arcanum"] .page-block,
+#chat-app-root[data-theme="arcanum"] .moments-page,
+#chat-app-root[data-theme="arcanum"] .moments-feed-wrap,
+#chat-app-root[data-theme="arcanum"] .white-canvas {
+  background: var(--sf-base);
+  color: var(--tx-main);
+}
+
+#chat-app-root[data-theme="arcanum"] .theme-choice-item {
+  background: var(--sf-raised);
+  border-color: var(--bd-main);
+  color: var(--tx-main);
+}

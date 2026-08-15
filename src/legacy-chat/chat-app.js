@@ -297,7 +297,7 @@
         { key: 'glass', name: '玻璃雾', desc: '通透轻雾感的玻璃界面', roomTheme: 'mist', aliases: ['晴空'] },
     ];
     // Full-UI themes live in global settings (themeSettings), not per-contact
-    const FULL_UI_THEMES = ['claude', 'claude-dark', 'windowsill', 'tape'];
+    const FULL_UI_THEMES = ['claude', 'claude-dark', 'arcanum', 'windowsill', 'tape'];
 
     function normalizeChatThemeKey(value) {
         const raw = String(value || '').trim();
@@ -9039,6 +9039,7 @@
         const fullUiOptions = [
             { id: 'claude', key: 'claude', name: '\u6696\u7eb8', desc: 'Claude \u00b7 \u8c61\u7259\u6696\u7eb8 \u00b7 \u5e72\u51c0\u7559\u767d' },
             { id: 'claude-dark', key: 'claude-dark', name: '\u591c\u7eb8', desc: 'Claude \u00b7 \u70ad\u7eb8\u6697\u8272 \u00b7 \u7c73\u767d\u5b57' },
+            { id: 'arcanum', key: 'arcanum', name: '霧藍', desc: 'ARCANUM · 冷调天光 · 气泡轻浮' },
             { id: 'windowsill', key: 'windowsill', name: '\u7a97\u53f0', desc: '\u9f20\u5c3e\u8349\xb7\u9676\u571f\xb7\u4e9a\u9ebb \xb7 \u51b7\u9759\u5de5\u5177\u611f' },
             { id: 'tape', key: 'tape', name: '\u78c1\u5e26', desc: '\u78e8\u7802\u73bb\u7483\xb7\u9493\u8272\xb7\u7b49\u5bbd\u5b57 \xb7 \u8f6f\u4ef6\u8bda\u5b9e' },
         ];
