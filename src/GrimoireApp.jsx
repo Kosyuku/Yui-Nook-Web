@@ -148,10 +148,13 @@ async function apiFetch(path, opts = {}) {
 // Shared style objects
 // ═══════════════════════════════════════════════════════════════
 const miniBtn = {
-  fontFamily: F.serifCn, fontSize: 11, letterSpacing: "1.5px",
-  padding: "5px 10px", borderRadius: 999,
+  fontFamily: F.serifCn, fontSize: 13, letterSpacing: "1.5px",
+  padding: "9px 14px", borderRadius: 999,
   border: `0.5px solid ${C.rule}`, background: C.cream,
   color: C.inkSoft, cursor: "pointer",
+  // 触摸目标下限。11px 字 + 5px padding 只有 ~21px 高，手指点不准。
+  minHeight: 36, display: "inline-flex", alignItems: "center", justifyContent: "center",
+  whiteSpace: "nowrap",
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -253,8 +256,8 @@ function ViewSwitcher({ value, onChange }) {
       {opts.map((o) => {
         const on = value === o.id;
         return (
-          <button key={o.id} onClick={() => onChange(o.id)} style={{ padding: "5px 10px", borderRadius: 6, border: "none", background: on ? C.cream : "transparent", color: on ? C.ink : C.inkFaint, fontFamily: F.serifCn, fontSize: 11, letterSpacing: "2px", display: "flex", alignItems: "center", gap: 4, cursor: "pointer", boxShadow: on ? "0 1px 3px rgba(40,30,20,0.1)" : "none" }}>
-            <span style={{ fontSize: 11 }}>{o.glyph}</span>{o.cn}
+          <button key={o.id} type="button" onClick={() => onChange(o.id)} aria-pressed={on} style={{ padding: "8px 13px", minHeight: 34, borderRadius: 6, border: "none", background: on ? C.cream : "transparent", color: on ? C.ink : C.inkFaint, fontFamily: F.serifCn, fontSize: 13, letterSpacing: "2px", display: "flex", alignItems: "center", gap: 5, cursor: "pointer", whiteSpace: "nowrap", boxShadow: on ? "0 1px 3px rgba(40,30,20,0.1)" : "none" }}>
+            <span style={{ fontSize: 12 }}>{o.glyph}</span>{o.cn}
           </button>
         );
       })}
@@ -485,7 +488,7 @@ function HomeSpreads({ tomes, entries, onTome, onEntry, onCreateTome }) {
 // ═══════════════════════════════════════════════════════════════
 // Tome screen  (= grimoire/tome.jsx)
 // ═══════════════════════════════════════════════════════════════
-function TomeHead({ tome, tomes, view, onView, onBack, onCreateEntry }) {
+function TomeHead({ tome, tomes, view, onView, onBack, onCreateEntry, searchOpen, searchQuery, onToggleSearch, onSearchQuery }) {
   return (
     <div style={{ padding: "4px 20px 14px", background: `linear-gradient(180deg, ${tome.palette.bg} 0%, ${C.paper} 100%)` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 0, color: C.inkFaint, fontFamily: F.serifEn, fontStyle: "italic", letterSpacing: "1.5px" }}>
@@ -502,14 +505,33 @@ function TomeHead({ tome, tomes, view, onView, onBack, onCreateEntry }) {
         </div>
         <Sigil tome={tome.id} tomes={tomes} size={38} />
       </div>
-      <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between" }}>
+      <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 8, justifyContent: "space-between", flexWrap: "wrap" }}>
         <ViewSwitcher value={view} onChange={onView} />
         <div style={{ display: "flex", gap: 6 }}>
-          <button type="button" onClick={onCreateEntry} style={miniBtn}>＋ 新页</button>
-          <button style={miniBtn}>⌕</button>
+          <button
+            type="button"
+            onClick={onToggleSearch}
+            aria-label="搜索典页"
+            aria-pressed={searchOpen}
+            style={{ ...miniBtn, ...(searchOpen ? { background: C.paperDeep, color: C.ink } : null), padding: "9px 12px" }}
+          >⌕</button>
           <button type="button" onClick={onCreateEntry} style={miniBtn}>＋ 新页</button>
         </div>
       </div>
+      {searchOpen ? (
+        <input
+          autoFocus
+          value={searchQuery}
+          onChange={(event) => onSearchQuery(event.target.value)}
+          placeholder="翻一翻这本典里的页…"
+          style={{
+            marginTop: 10, width: "100%", boxSizing: "border-box",
+            padding: "10px 12px", borderRadius: 8,
+            border: `0.5px solid ${C.rule}`, background: C.paperDeep, color: C.ink,
+            fontFamily: F.serifCn, fontSize: 13, letterSpacing: "1px", outline: "none",
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -599,13 +621,37 @@ function BoardView({ entries, density, onEntry }) {
 
 function TomeScreen({ tome, entries, tomes, density = "comfy", onBack, onEntry, onCreateEntry }) {
   const [view, setView] = useState("gallery");
-  const tomeEntries = entries.filter((e) => e.tome === tome.id);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const allTomeEntries = entries.filter((e) => e.tome === tome.id);
+  const needle = searchQuery.trim().toLowerCase();
+  const tomeEntries = needle
+    ? allTomeEntries.filter((entry) => [entry.title, entry.summary, entry.type, entry.status]
+        .some((field) => String(field || "").toLowerCase().includes(needle)))
+    : allTomeEntries;
+  const filtered = needle && tomeEntries.length !== allTomeEntries.length;
+
   return (
     <div style={{ width: "100%", height: "100%", background: C.paper, overflow: "auto", display: "flex", flexDirection: "column" }} className="phone-scroll">
-      <TomeHead tome={tome} tomes={tomes} view={view} onView={setView} onBack={onBack} onCreateEntry={onCreateEntry} />
+      <TomeHead
+        tome={tome} tomes={tomes} view={view} onView={setView}
+        onBack={onBack} onCreateEntry={onCreateEntry}
+        searchOpen={searchOpen}
+        searchQuery={searchQuery}
+        onToggleSearch={() => {
+          setSearchOpen((open) => {
+            if (open) setSearchQuery("");   // 收起时清掉，免得列表悄悄留在过滤态
+            return !open;
+          });
+        }}
+        onSearchQuery={setSearchQuery}
+      />
       <div style={{ padding: "0 20px 4px", display: "flex", alignItems: "baseline", gap: 8 }}>
         <span style={{ fontFamily: F.handEn, fontSize: 14, color: tome.palette.accent }}>{tomeEntries.length} pages</span>
-        <span style={{ fontFamily: F.serifCn, fontSize: 9, color: C.inkFaint, letterSpacing: "2px" }}>· 共 {tomeEntries.length} 条 · {tome.lastEdited}</span>
+        <span style={{ fontFamily: F.serifCn, fontSize: 9, color: C.inkFaint, letterSpacing: "2px" }}>
+          {filtered ? `· 从 ${allTomeEntries.length} 条里筛出` : `· 共 ${tomeEntries.length} 条 · ${tome.lastEdited}`}
+        </span>
       </div>
       <div style={{ flex: 1, overflow: "auto" }} className="phone-scroll">
         {view === "gallery" && <GalleryView entries={tomeEntries} density={density} tomes={tomes} onEntry={onEntry} />}
