@@ -196,7 +196,6 @@
         currentRpMessages: [],
         conversations: {},
         rpMessages: {},
-        usageSheetOpen: false,
         roomMenuOpen: false,
         rpRoomDialogOpen: false,
         rpRoomDialogMode: 'create',
@@ -275,6 +274,7 @@
         },
         historyLoadingContactIds: {},
         historyLoadedContactIds: {},
+        historyFailedAt: {},
         rpCurtainRunning: false,
     };
     const agentPersonaSaveTimers = new Map();
@@ -528,81 +528,6 @@
         if (v >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
         return String(Math.round(v));
     }
-    function renderUsagePill() {
-        if (_usageData === null) { if (!_usageFetching) fetchUsage(); return ''; }
-        if (!_usageData.length) return '';
-
-        // 有百分比的优先（说明标定过额度上限），否则退而取用量最大的那条
-        const withPct = _usageData.filter(i => (Number(i.pct) || 0) > 0);
-        const pool = withPct.length ? withPct : _usageData;
-        const key = withPct.length ? 'pct' : 'used';
-        const top = pool.reduce((a, b) => (Number(b[key]) || 0) > (Number(a[key]) || 0) ? b : a);
-        const label = escapeHtml(top.label || '用量');
-
-        // 没标定上限时没有分母，显示 token 数而不是一个永远 0% 的空进度条
-        if (!withPct.length) {
-            const used = Number(top.used) || 0;
-            if (!used) return '';
-            return `
-          <button class="usage-pill low nolimit" data-action="open-usage" type="button" aria-label="用量" title="${label}：${used.toLocaleString()} tokens">
-            <span class="usage-pill-pct">${formatTokenCount(used)}</span>
-          </button>`;
-        }
-
-        const pct = Math.max(0, Math.min(100, Math.round(Number(top.pct) || 0)));
-        const level = pct >= 85 ? 'high' : pct >= 60 ? 'mid' : 'low';
-        return `
-          <button class="usage-pill ${level}" data-action="open-usage" type="button" aria-label="用量" title="${label}：${pct}%">
-            <span class="usage-pill-bar"><span class="usage-pill-fill" style="width:${pct}%"></span></span>
-            <span class="usage-pill-pct">${pct}%</span>
-          </button>`;
-    }
-
-    /** 点 pill 弹出的用量详情。复用朋友圈评论弹层那套 sheet 样式，不新增 CSS。 */
-    function renderUsageSheet() {
-        const items = _usageData || [];
-        const rows = items.map(item => {
-            const pct = Math.max(0, Math.min(100, Math.round(Number(item.pct) || 0)));
-            const used = Number(item.used) || 0;
-            const limit = Number(item.limit) || 0;
-            const level = pct >= 85 ? 'high' : pct >= 60 ? 'mid' : 'low';
-            // 有上限就显示进度条，没有就只报用量（见 renderUsagePill 同款逻辑）
-            const right = limit
-                ? `${pct}%`
-                : (used ? formatTokenCount(used) : '—');
-            const bar = limit
-                ? `<span class="usage-pill-bar" style="width:100%"><span class="usage-pill-fill" style="width:${pct}%"></span></span>`
-                : '';
-            const detail = limit
-                ? `${used.toLocaleString()} / ${limit.toLocaleString()}`
-                : (used ? `${used.toLocaleString()} tokens` : '');
-            return `
-              <div class="sheet-comment usage-pill ${level}" style="display:block;width:100%;height:auto;padding:10px 12px;margin-bottom:8px;">
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-                  <strong style="font-size:13px;">${escapeHtml(item.label || '')}</strong>
-                  <span class="usage-pill-pct">${right}</span>
-                </div>
-                ${bar}
-                ${detail ? `<div style="font-size:11px;opacity:.7;margin-top:4px;">${escapeHtml(detail)}</div>` : ''}
-                ${item.source ? `<div style="font-size:10px;opacity:.5;margin-top:2px;">来源：${escapeHtml(item.source)}</div>` : ''}
-              </div>`;
-        }).join('');
-
-        return `
-      <div class="sheet-overlay" data-action="close-usage">
-        <div class="comment-sheet" data-action="noop">
-          <div class="sheet-handle"></div>
-          <div class="sheet-head">
-            <strong>用量</strong>
-            <button class="icon-btn" data-action="close-usage" type="button" aria-label="关闭">✕</button>
-          </div>
-          <div class="sheet-comments">
-            ${rows || '<div style="opacity:.6;font-size:13px;padding:8px 0;">暂无用量数据</div>'}
-          </div>
-        </div>
-      </div>`;
-    }
-
     /** DOM 直接更新思考行（流式阶段快速刷新，避免整页 re-render） */
     function patchThinkingLineDom(msgId, fullThinking, isDone) {
         const textEl = root()?.querySelector(`#tl-text-${msgId}`);
@@ -1413,7 +1338,6 @@
         ${state.topicConfirmOpen ? renderTopicConfirmDialog() : ''}
         ${state.rpRoomDialogOpen ? renderRpRoomDialog() : ''}
         ${state.avatarCropper ? renderAvatarCropperDialog() : ''}
-        ${state.usageSheetOpen ? renderUsageSheet() : ''}
       </div>
     `;
         bind();
@@ -2390,14 +2314,30 @@
         return mergeMessageLists(buckets, Array.isArray(contact.messages) ? contact.messages : []);
     }
 
+    // 请求失败后隔多久才允许重试。没有这个间隔，失败就会在每次 render 时重来一次。
+    const HISTORY_RETRY_COOLDOWN_MS = 20000;
+
     function ensureRoomHistoryLoaded(contact = {}) {
         if (state.currentView !== 'room' || !contact?.id) return;
         if (conversationMessagesForContact(contact).length) return;
         if (state.historyLoadingContactIds[contact.id] || state.historyLoadedContactIds[contact.id]) return;
+
+        // 上次失败还在冷却期内就先不打扰。render 每次点击都会跑，没有这道闸的话
+        // 一个空对话或一次网络抖动就会变成「每点一下发一次请求」。
+        const lastFailedAt = state.historyFailedAt[contact.id] || 0;
+        if (lastFailedAt && Date.now() - lastFailedAt < HISTORY_RETRY_COOLDOWN_MS) return;
+
         state.historyLoadingContactIds[contact.id] = true;
         loadMurmurHistoryForContact(contact.id)
             .then((count) => {
-                if (count) state.historyLoadedContactIds[contact.id] = true;
+                // 拿到 0 条也算加载过了 —— 这个对话本来就是空的，不该反复重试。
+                // 原来只在 count>0 时标记，空对话于是每次 render 都重新拉一遍。
+                state.historyLoadedContactIds[contact.id] = true;
+                delete state.historyFailedAt[contact.id];
+                // 不在这里 render：loadMurmurHistoryForContact 拿到消息时自己会渲染
+            })
+            .catch(() => {
+                state.historyFailedAt[contact.id] = Date.now();
             })
             .finally(() => {
                 delete state.historyLoadingContactIds[contact.id];
@@ -4757,19 +4697,6 @@
 
         if (action === 'close-room-menu') {
             state.roomMenuOpen = false;
-            render();
-            return;
-        }
-
-        if (action === 'open-usage') {
-            _usageData = null;          // 重新拉一次，别看旧数
-            state.usageSheetOpen = true;
-            render();
-            return;
-        }
-
-        if (action === 'close-usage') {
-            state.usageSheetOpen = false;
             render();
             return;
         }
