@@ -197,6 +197,7 @@
         conversations: {},
         rpMessages: {},
         usageSheetOpen: false,
+        roomMenuOpen: false,
         rpRoomDialogOpen: false,
         rpRoomDialogMode: 'create',
         rpRoomForm: {
@@ -1759,11 +1760,10 @@
         const ccAllowed = canToggleCCForContact(c);
         const codexActive = isCodexEnabledForContact(c);
         const ccActive = isCCEnabledForContact(c);
-        const takeoverButton = codexAllowed
-            ? `<button class="takeover-toggle ${codexActive ? 'active' : ''}" data-action="toggle-codex-mode" data-contact-id="${escapeHtml(c.id)}" type="button" aria-pressed="${codexActive}" aria-label="${codexActive ? '关闭 Codex 接管' : '启用 Codex 接管'}">Codex</button>`
-            : ccAllowed
-                ? `<button class="takeover-toggle cc ${ccActive ? 'active' : ''}" data-action="toggle-cc-mode" data-contact-id="${escapeHtml(c.id)}" type="button" aria-pressed="${ccActive}" aria-label="${ccActive ? '关闭 Claude Code 接管' : '启用 Claude Code 接管'}">CC</button>`
-                : '';
+        // 接管态直接写进模型名那行，不再额外挂 CC / Codex 徽章；
+        // 用量和接管开关都收进右上角菜单，顶栏只留返回 / 资料 / 更多。
+        const modelLabel = codexActive ? 'Codex' : ccActive ? 'Claude Code' : displayModel;
+        const takeover = codexActive || ccActive;
         return `
       <header class="room-hero room-theme-${c.theme}">
         <div class="room-hero-inner">
@@ -1773,19 +1773,50 @@
             <div class="room-profile-meta">
               <div class="room-profile-title-line">
                 <strong class="room-profile-name">${escapeHtml(c.name)}</strong>
-                <span class="room-profile-model">${escapeHtml(displayModel)}</span>
               </div>
-              <div class="room-profile-sub"><span class="online-dot"></span> \u5728\u7ebf</div>
+              <div class="room-profile-sub"><span class="online-dot"></span><span class="room-profile-model${takeover ? ' takeover' : ''}">${escapeHtml(modelLabel)}</span></div>
             </div>
           </div>
           <div class="room-actions">
-            ${renderUsagePill()}
-            ${takeoverButton}
-            <button class="icon-btn icon-circle" data-action="open-contact-settings" aria-label="\u8054\u7cfb\u4eba\u8bbe\u7f6e">${icon('settings')}</button>
+            <button class="icon-btn icon-circle" data-action="open-room-menu" aria-label="\u66f4\u591a" aria-expanded="${state.roomMenuOpen ? 'true' : 'false'}">${icon('settings')}</button>
           </div>
         </div>
+        ${state.roomMenuOpen ? renderRoomMenu(c, { codexAllowed, ccAllowed, codexActive, ccActive }) : ''}
       </header>
     `;
+    }
+
+    /** 顶栏收起来的菜单：用量、接管开关、联系人设置都挪进来，顶栏只留三个元素。 */
+    function renderRoomMenu(c, { codexAllowed, ccAllowed, codexActive, ccActive }) {
+        // 注意：这里**不**触发 fetchUsage。渲染函数里发请求会让每次 render 都带上
+        // 一轮网络往返（render 又会被 fetch 的回调再触发一次），是这个页面卡手的
+        // 来源之一。拉取放在 open-room-menu 的点击处理里。
+        const usageRows = (_usageData || []).map((item) => {
+            const used = Number(item.used) || 0;
+            const limit = Number(item.limit) || 0;
+            const pct = Math.max(0, Math.min(100, Math.round(Number(item.pct) || 0)));
+            const right = limit ? `${pct}%` : (used ? formatTokenCount(used) : '—');
+            return `<div class="room-menu-usage"><span>${escapeHtml(item.label || '')}</span><strong>${right}</strong></div>`;
+        }).join('');
+
+        const toggleRow = (label, action, active) => `
+          <button class="room-menu-item" type="button" role="menuitemcheckbox" aria-checked="${active}"
+                  data-action="${action}" data-contact-id="${escapeHtml(c.id)}">
+            ${label}<span class="room-menu-state${active ? ' on' : ''}">${active ? '接管中' : '关'}</span>
+          </button>`;
+
+        return `
+      <div class="room-menu-backdrop" data-action="close-room-menu"></div>
+      <div class="room-menu" role="menu">
+        ${usageRows ? `<div class="room-menu-section room-menu-usage-list">${usageRows}</div>` : ''}
+        ${codexAllowed || ccAllowed ? `<div class="room-menu-section">
+          ${codexAllowed ? toggleRow('Codex', 'toggle-codex-mode', codexActive) : ''}
+          ${ccAllowed ? toggleRow('Claude Code', 'toggle-cc-mode', ccActive) : ''}
+        </div>` : ''}
+        <div class="room-menu-section">
+          <button class="room-menu-item" type="button" role="menuitem" data-action="open-contact-settings">联系人设置</button>
+        </div>
+      </div>`;
     }
 
     function renderRpRoomHeader() {
@@ -4717,6 +4748,19 @@
             render();
         }
 
+        if (action === 'open-room-menu') {
+            state.roomMenuOpen = !state.roomMenuOpen;
+            render();
+            if (state.roomMenuOpen) { _usageData = null; fetchUsage(); }  // 渲染完再拉，别卡住这次点击
+            return;
+        }
+
+        if (action === 'close-room-menu') {
+            state.roomMenuOpen = false;
+            render();
+            return;
+        }
+
         if (action === 'open-usage') {
             _usageData = null;          // 重新拉一次，别看旧数
             state.usageSheetOpen = true;
@@ -4753,6 +4797,7 @@
         }
 
         if (action === 'open-contact-settings') {
+            state.roomMenuOpen = false;
             state.currentSettingsTab = 'basic';
             state.currentView = 'contactSettings';
             render();
@@ -5546,11 +5591,13 @@
         }
 
         if (action === 'toggle-codex-mode') {
+            state.roomMenuOpen = false;     // 从顶栏菜单点进来时顺手收起
             toggleCurrentCodexMode(target.dataset.contactId);
             return;
         }
 
         if (action === 'toggle-cc-mode') {
+            state.roomMenuOpen = false;
             toggleCurrentCCMode(target.dataset.contactId);
             return;
         }

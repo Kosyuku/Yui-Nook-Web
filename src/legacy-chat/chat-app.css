@@ -7321,3 +7321,93 @@ button.model-choice-item {
   .memory-map { min-height: 285px; }
   .memory-map-detail { flex-direction: column; }
 }
+
+/* ── 聊天顶栏的「更多」菜单 ──────────────────────────────────────────
+   顶栏原本挤了六个元素（返回/头像/名字+模型/用量 pill/CC 徽章/设置）。
+   用量和接管开关收进这个菜单，接管态改写进模型名那行，顶栏只剩三个。
+   ──────────────────────────────────────────────────────────────── */
+
+.room-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.room-menu {
+  position: absolute;
+  top: calc(100% - 6px);
+  right: 14px;
+  z-index: 41;
+  min-width: 208px;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid var(--bd-soft);
+  background: var(--sf-base);
+  box-shadow: var(--sd-lg);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.room-menu-section + .room-menu-section {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--bd-soft);
+}
+
+.room-menu-item {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--tx-main);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.room-menu-item:hover {
+  background: var(--sf-ghost);
+}
+
+.room-menu-state {
+  font-size: 11px;
+  color: var(--tx-faint);
+}
+
+.room-menu-state.on {
+  color: var(--ac-main);
+  font-weight: 600;
+}
+
+/* 用量是只读信息，不做成可点的行，免得看着像按钮 */
+.room-menu-usage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--tx-muted);
+}
+
+.room-menu-usage strong {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tx-main);
+}
+
+/* 模型名从名字旁边挪到「在线」那行；接管中时高亮，替代原来的 CC 徽章 */
+.room-profile-sub .room-profile-model {
+  margin-left: 6px;
+}
+
+.room-profile-sub .room-profile-model.takeover {
+  color: var(--ac-main);
+  font-weight: 600;
+}
