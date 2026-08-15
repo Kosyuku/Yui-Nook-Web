@@ -1724,12 +1724,26 @@ label,
 
 .legacy-chat-root {
   width: 100vw;
-  max-width: 414px;
+  /* 手机上仍是满宽；桌面上放开到 820px，不再是屏幕中间一条 414px 的窄缝。
+     其余页面（魔典/日记）本来就是自适应的，聊天页之前是唯一锁死手机宽度的。 */
+  max-width: min(100vw, 820px);
   height: 100vh;
   min-height: 100vh;
   max-height: 100vh;
   margin: 0 auto;
   overflow: hidden;
+}
+
+/* 气泡原本只有百分比约束（82%/78%），shell 一放宽就会拉出 670px 的长行，
+   一行字太多来回扫视很累。加一个绝对上限把行长压在舒适区。
+   多一个 .legacy-chat-root 是为了盖过后加载的 chat-app.css，不用 !important。
+   TODO: 等 chat-app.css 的 token 重构落地后，把这两条挪回那边就近维护。 */
+.legacy-chat-root .message-row.from-ai .message-bubble-wrap {
+  max-width: min(82%, 40em);
+}
+
+.legacy-chat-root .message-row.from-user .message-bubble-wrap {
+  max-width: min(78%, 40em);
 }
 
 .chat-shell-page .chat-app {
