@@ -1127,15 +1127,15 @@ function normalizeAmberMemory(memory, index) {
 }
 
 function constellationScore(center, candidate) {
-  if (center.id === candidate.id) return -1;
+  if (center.id === candidate.id) return 0;
   let score = 0;
-  if (center.person === candidate.person) score += 2;
-  if (center.type === candidate.type) score += 3;
-  const sharedTags = center.tags.filter((tag) => candidate.tags.includes(tag));
-  score += sharedTags.length * 3;
+  if (center.person && center.person === candidate.person) score += 2;
+  if (center.type === candidate.type) score += 2;
+  const sharedTags = center.tags.filter((tag) => tag && candidate.tags.includes(tag));
+  score += Math.min(sharedTags.length, 2) * 3;
   const centerWords = String(center.summary || "").match(/[一-鿿]{2,}|[a-zA-Z]{3,}/g) || [];
   const candidateText = String(candidate.summary || "").toLowerCase();
-  score += centerWords.filter((word) => candidateText.includes(word.toLowerCase())).length * 2;
+  score += Math.min(centerWords.filter((word) => candidateText.includes(word.toLowerCase())).length, 2) * 2;
   return score;
 }
 
@@ -1144,39 +1144,54 @@ function constellationColor(memory) {
   return colors[memory.type] || "#a387b7";
 }
 
-function MemoryConstellation({ memories, agentNames, selectedId, onSelect }) {
-  const center = memories.find((memory) => memory.id === selectedId)
-    || [...memories].sort((a, b) => (b.importance - a.importance) || (b.temperature - a.temperature) || new Date(b.dateISO || 0) - new Date(a.dateISO || 0))[0];
-  if (!center) return <AmberModule title="记忆星图"><p style={amberEmptyTextStyle}>还没有可连成星图的记忆</p></AmberModule>;
+const CONSTELLATION_SLOTS = [[12, 19], [31, 12], [54, 16], [76, 12], [89, 31], [82, 57], [71, 81], [49, 85], [27, 78], [10, 59], [19, 40], [49, 48], [65, 61], [39, 63]];
 
-  const related = memories
-    .filter((memory) => memory.id !== center.id)
-    .map((memory) => ({ memory, score: constellationScore(center, memory) }))
-    .filter(({ score }) => score > 0)
-    .sort((a, b) => b.score - a.score || b.memory.importance - a.memory.importance)
-    .slice(0, 6)
-    .map(({ memory }) => memory);
-  const positions = [[17, 21], [78, 17], [86, 58], [66, 84], [25, 78], [8, 51]];
+function MemoryConstellation({ memories, agentNames, selectedId, onSelect }) {
+  const nodes = [...memories]
+    .sort((a, b) => (b.importance - a.importance) || (b.temperature - a.temperature) || (b.touch_count - a.touch_count) || new Date(b.dateISO || 0) - new Date(a.dateISO || 0))
+    .slice(0, CONSTELLATION_SLOTS.length);
+  const focus = nodes.find((memory) => memory.id === selectedId) || null;
+  if (!nodes.length) return <AmberModule title="记忆星图"><p style={amberEmptyTextStyle}>还没有可连成星图的记忆</p></AmberModule>;
+
+  const positions = new Map(nodes.map((memory, index) => [memory.id, CONSTELLATION_SLOTS[index]]));
+  const edges = [];
+  nodes.forEach((left, index) => nodes.slice(index + 1).forEach((right) => {
+    const score = constellationScore(left, right);
+    if (score >= 3) edges.push({ left, right, score });
+  }));
+  const neighbors = focus ? edges.filter((edge) => edge.left.id === focus.id || edge.right.id === focus.id).map((edge) => edge.left.id === focus.id ? edge.right : edge.left) : [];
 
   return (
-    <AmberModule title="记忆星图" badge={related.length ? `关联 ${related.length}` : "独立"}>
-      <div style={{ padding: "8px 12px 14px" }}>
-        <div style={{ position: "relative", height: 238, overflow: "hidden", border: "0.5px solid rgba(190,174,200,.26)", background: "rgba(255,255,255,.48)" }}>
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
-            {related.map((memory, index) => <line key={memory.id} x1="50" y1="50" x2={positions[index][0]} y2={positions[index][1]} stroke={constellationColor(memory)} strokeOpacity="0.38" strokeWidth="0.45" />)}
-          </svg>
-          {related.map((memory, index) => {
-            const [left, top] = positions[index];
-            return <button key={memory.id} type="button" onClick={() => onSelect(memory.id)} title={memory.summary} style={{ position: "absolute", left: `${left}%`, top: `${top}%`, width: 31, height: 31, transform: "translate(-50%, -50%)", borderRadius: "50%", border: `1px solid ${constellationColor(memory)}`, background: "rgba(255,255,255,.92)", boxShadow: "0 2px 8px rgba(80,60,90,.12)", cursor: "pointer", padding: 0 }} aria-label={`查看关联记忆：${memory.summary}`}><span style={{ display: "block", width: 9, height: 9, margin: "auto", borderRadius: "50%", background: constellationColor(memory) }} /></button>;
-          })}
-          <button type="button" onClick={() => onSelect(center.id)} title={center.summary} style={{ position: "absolute", left: "50%", top: "50%", width: 78, height: 78, transform: "translate(-50%, -50%)", borderRadius: "50%", border: `1px solid ${constellationColor(center)}`, background: "rgba(255,253,250,.98)", color: "#4f4743", boxShadow: `0 6px 18px ${constellationColor(center)}30`, cursor: "pointer", padding: "10px 8px", fontFamily: F.serifCn, fontSize: 11, lineHeight: 1.3, overflow: "hidden" }} aria-label={`当前中心记忆：${center.summary}`}>
-            <span style={{ display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{center.summary}</span>
-          </button>
+    <AmberModule title="记忆星图" badge={`${nodes.length} nodes`}>
+      <div style={{ padding: "11px 12px 14px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, margin: "0 2px 9px", color: "rgba(105,95,82,.64)", fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace", fontSize: 10, letterSpacing: ".04em" }}>
+          <span>NETWORK · {edges.length} LINKS</span>
+          {focus && <button type="button" onClick={() => onSelect("")} style={{ border: 0, padding: 0, background: "transparent", color: "rgba(160,118,49,.86)", font: "inherit", cursor: "pointer" }}>RETURN TO GLOBAL</button>}
         </div>
-        <div style={{ padding: "11px 3px 2px", display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 10, color: "rgba(125,105,140,.62)", letterSpacing: "0.08em" }}>{agentNames.get(center.person) || center.agent_id} · {center.type} · 重要度 {center.importance || 0}</span>
-          <strong style={{ fontSize: 13, fontWeight: 500, color: "#4f4743", lineHeight: 1.5 }}>{center.summary}</strong>
-          <span style={{ fontSize: 11, color: "rgba(105,95,90,.65)" }}>{related.length ? "点周围的星点，换一条记忆当中心。" : "这条记忆暂时还没有足够明确的关联。"}</span>
+        <div style={{ position: "relative", height: 286, overflow: "hidden", borderRadius: 12, background: "#ebe6d9", boxShadow: "inset 5px 5px 13px rgba(85,80,62,.2), inset -4px -4px 10px rgba(255,255,255,.35), 0 0 0 7px rgba(255,255,255,.42)" }}>
+          <div aria-hidden="true" style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(110,101,80,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(110,101,80,.12) 1px, transparent 1px)", backgroundSize: "26px 26px", opacity: .68 }} />
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+            {edges.map((edge) => {
+              const [x1, y1] = positions.get(edge.left.id);
+              const [x2, y2] = positions.get(edge.right.id);
+              const active = focus && (edge.left.id === focus.id || edge.right.id === focus.id);
+              return <line key={`${edge.left.id}-${edge.right.id}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(100,88,60,.72)" strokeOpacity={active ? .76 : .22} strokeWidth={active ? 1.05 : .48} />;
+            })}
+          </svg>
+          {nodes.map((memory) => {
+            const [left, top] = positions.get(memory.id);
+            const active = focus?.id === memory.id;
+            const adjacent = focus && neighbors.some((neighbor) => neighbor.id === memory.id);
+            const radius = Math.max(8, Math.min(15, 7 + Math.sqrt(Math.max(memory.importance, memory.temperature, 1)) * 1.4));
+            return <button key={memory.id} type="button" onClick={() => onSelect(active ? "" : memory.id)} title={memory.summary} aria-label={`聚焦记忆：${memory.summary}`} style={{ position: "absolute", left: `${left}%`, top: `${top}%`, width: radius * 2, height: radius * 2, transform: "translate(-50%, -50%)", borderRadius: "50%", border: active ? "1.5px solid rgba(180,138,40,.92)" : `1px solid ${constellationColor(memory)}88`, background: active ? "rgba(180,138,40,.94)" : constellationColor(memory), boxShadow: active ? "0 0 0 7px rgba(180,138,40,.17), 0 0 18px rgba(180,138,40,.38)" : adjacent ? `0 0 11px ${constellationColor(memory)}88` : "none", opacity: !focus || active || adjacent ? 1 : .35, cursor: "pointer", padding: 0, transition: "opacity .16s ease, box-shadow .16s ease" }} />;
+          })}
+          {focus && (() => {
+            const [left, top] = positions.get(focus.id);
+            return <div style={{ position: "absolute", left: `${left}%`, top: `calc(${top}% + 20px)`, transform: "translateX(-50%)", width: 148, pointerEvents: "none", textAlign: "center", color: "rgba(88,70,42,.9)", fontFamily: F.serifCn, fontSize: 11, lineHeight: 1.35, textShadow: "0 1px rgba(255,255,255,.72)" }}>{focus.summary.length > 26 ? `${focus.summary.slice(0, 26)}…` : focus.summary}</div>;
+          })()}
+        </div>
+        <div style={{ marginTop: 16, padding: "9px 12px", borderRadius: 9, background: "#ebe6d9", boxShadow: "inset 2px 2px 6px rgba(85,80,62,.16), inset -2px -2px 5px rgba(255,255,255,.28)", color: "rgba(84,77,60,.76)", fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace", fontSize: 10, lineHeight: 1.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {focus ? `FOCUS · ${agentNames.get(focus.person) || focus.agent_id} · ${focus.type} · ${neighbors.length} NEIGHBORS` : "SYSTEM READY · 点击节点展开关联记忆"}
         </div>
       </div>
     </AmberModule>
