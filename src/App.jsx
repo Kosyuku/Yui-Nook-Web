@@ -233,7 +233,8 @@ function installRichTextInputs(rootNode = document) {
 const STORAGE_KEY = "yui_nook_react_phone_v1";
 const API_BASE = apiBase;
 const DEFAULT_AGENT_ID = "ayan";
-const defaultWallpaper = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200&q=80";
+const previousDefaultWallpaper = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200&q=80";
+const defaultWallpaper = "/assets/winter-home-wallpaper.png";
 const defaultChatContacts = [
   { id: "ayan", name: "?", subtitle: "?", avatar: "?", tone: "?" },
   { id: "yui", name: "YUI", subtitle: "?", avatar: "Y", tone: "?" },
@@ -320,7 +321,8 @@ const iconPresets = [
 ];
 
 const wallpaperPresets = [
-  { id: "sea", label: "?", value: defaultWallpaper },
+  { id: "winter", label: "?", value: defaultWallpaper },
+  { id: "sea", label: "?", value: previousDefaultWallpaper },
   { id: "sakura", label: "?", value: "linear-gradient(135deg, #ffdce8 0%, #fff5f8 42%, #f1e6ff 100%)" },
   { id: "mist", label: "?", value: "linear-gradient(135deg, #f3d9ef 0%, #e6e1fb 46%, #dff0ff 100%)" },
 ];
@@ -348,7 +350,7 @@ function ensureDefaultApps(apps) {
 function createInitialPhone() {
   const saved = readSavedPhone();
   return {
-    wallpaper: saved.wallpaper || defaultWallpaper,
+    wallpaper: saved.wallpaper === previousDefaultWallpaper ? defaultWallpaper : (saved.wallpaper || defaultWallpaper),
     desktopApps: ensureDefaultApps(normalizeSavedApps(saved.desktopApps, defaultDesktopApps)),
     dockApps: normalizeSavedApps(saved.dockApps, defaultDockApps),
     layout: saved.layout || "鎭嬬埍缁勪欢 + 6 App",
@@ -2399,6 +2401,7 @@ export default function App() {
         setPhone((current) => ({
           ...current,
           ...data.phone,
+          wallpaper: data.phone.wallpaper === previousDefaultWallpaper ? defaultWallpaper : (data.phone.wallpaper || current.wallpaper),
           desktopApps: ensureDefaultApps(normalizeSavedApps(data.phone.desktopApps, current.desktopApps)),
         }));
       } catch {

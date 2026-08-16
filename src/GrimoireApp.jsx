@@ -119,8 +119,10 @@ function BackLink({ onClick, children = "grimoire" }) {
         display: "inline-flex",
         alignItems: "center",
         gap: 5,
-        minHeight: 28,
-        padding: "0 4px",
+        minWidth: 96,
+        minHeight: 44,
+        padding: "0 12px",
+        borderRadius: 8,
         fontFamily: F.serifEn,
         fontStyle: "italic",
         fontSize: 12,
@@ -153,7 +155,7 @@ const miniBtn = {
   border: `0.5px solid ${C.rule}`, background: C.cream,
   color: C.inkSoft, cursor: "pointer",
   // 触摸目标下限。11px 字 + 5px padding 只有 ~21px 高，手指点不准。
-  minHeight: 36, display: "inline-flex", alignItems: "center", justifyContent: "center",
+  minHeight: 44, display: "inline-flex", alignItems: "center", justifyContent: "center",
   whiteSpace: "nowrap",
 };
 
@@ -256,7 +258,7 @@ function ViewSwitcher({ value, onChange }) {
       {opts.map((o) => {
         const on = value === o.id;
         return (
-          <button key={o.id} type="button" onClick={() => onChange(o.id)} aria-pressed={on} style={{ padding: "8px 13px", minHeight: 34, borderRadius: 6, border: "none", background: on ? C.cream : "transparent", color: on ? C.ink : C.inkFaint, fontFamily: F.serifCn, fontSize: 13, letterSpacing: "2px", display: "flex", alignItems: "center", gap: 5, cursor: "pointer", whiteSpace: "nowrap", boxShadow: on ? "0 1px 3px rgba(40,30,20,0.1)" : "none" }}>
+          <button key={o.id} type="button" onClick={() => onChange(o.id)} aria-pressed={on} style={{ padding: "8px 13px", minHeight: 44, borderRadius: 6, border: "none", background: on ? C.cream : "transparent", color: on ? C.ink : C.inkFaint, fontFamily: F.serifCn, fontSize: 13, letterSpacing: "2px", display: "flex", alignItems: "center", gap: 5, cursor: "pointer", whiteSpace: "nowrap", boxShadow: on ? "0 1px 3px rgba(40,30,20,0.1)" : "none" }}>
             <span style={{ fontSize: 12 }}>{o.glyph}</span>{o.cn}
           </button>
         );
@@ -488,12 +490,11 @@ function HomeSpreads({ tomes, entries, onTome, onEntry, onCreateTome }) {
 // ═══════════════════════════════════════════════════════════════
 // Tome screen  (= grimoire/tome.jsx)
 // ═══════════════════════════════════════════════════════════════
-function TomeHead({ tome, tomes, view, onView, onBack, onCreateEntry, searchOpen, searchQuery, onToggleSearch, onSearchQuery }) {
+function TomeHead({ tome, tomes, view, onView, onBack, onCreateEntry, onDeleteTome, searchOpen, searchQuery, onToggleSearch, onSearchQuery }) {
   return (
     <div style={{ padding: "4px 20px 14px", background: `linear-gradient(180deg, ${tome.palette.bg} 0%, ${C.paper} 100%)` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 0, color: C.inkFaint, fontFamily: F.serifEn, fontStyle: "italic", letterSpacing: "1.5px" }}>
         <BackLink onClick={onBack}>grimoire</BackLink>
-        <span onClick={onBack} style={{ cursor: "pointer" }}>← grimoire</span>
         <span style={{ opacity: 0.5, margin: "0 4px" }}>/</span>
         <span style={{ fontFamily: F.serifCn, fontStyle: "normal", color: C.inkSoft }}>魔典</span>
       </div>
@@ -513,9 +514,10 @@ function TomeHead({ tome, tomes, view, onView, onBack, onCreateEntry, searchOpen
             onClick={onToggleSearch}
             aria-label="搜索典页"
             aria-pressed={searchOpen}
-            style={{ ...miniBtn, ...(searchOpen ? { background: C.paperDeep, color: C.ink } : null), padding: "9px 12px" }}
+            style={{ ...miniBtn, ...(searchOpen ? { background: C.paperDeep, color: C.ink } : null), width: 44, padding: 0 }}
           >⌕</button>
           <button type="button" onClick={onCreateEntry} style={miniBtn}>＋ 新页</button>
+          <button type="button" onClick={onDeleteTome} aria-label="删除这本典" style={{ ...miniBtn, color: C.stamp, borderColor: `${C.stamp}66` }}>删除</button>
         </div>
       </div>
       {searchOpen ? (
@@ -619,7 +621,7 @@ function BoardView({ entries, density, onEntry }) {
   );
 }
 
-function TomeScreen({ tome, entries, tomes, density = "comfy", onBack, onEntry, onCreateEntry }) {
+function TomeScreen({ tome, entries, tomes, density = "comfy", onBack, onEntry, onCreateEntry, onDeleteTome }) {
   const [view, setView] = useState("gallery");
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -636,7 +638,7 @@ function TomeScreen({ tome, entries, tomes, density = "comfy", onBack, onEntry, 
     <div style={{ width: "100%", height: "100%", background: C.paper, overflow: "auto", display: "flex", flexDirection: "column" }} className="phone-scroll">
       <TomeHead
         tome={tome} tomes={tomes} view={view} onView={setView}
-        onBack={onBack} onCreateEntry={onCreateEntry}
+        onBack={onBack} onCreateEntry={onCreateEntry} onDeleteTome={onDeleteTome}
         searchOpen={searchOpen}
         searchQuery={searchQuery}
         onToggleSearch={() => {
@@ -687,12 +689,12 @@ function SectionLabel({ children }) {
   );
 }
 
-function JotDetail({ e, tome, onBack, onEdit }) {
+function JotDetail({ e, tome, onBack, onEdit, onDelete }) {
   return (
     <div style={{ width: "100%", height: "100%", background: "#FCFAF5", backgroundImage: "repeating-linear-gradient(0deg, transparent 0 31px, rgba(120,150,180,0.16) 31px 32px)", backgroundPosition: "0 56px", overflow: "auto", position: "relative" }} className="phone-scroll">
       <div style={{ position: "absolute", top: 0, bottom: 0, left: 40, width: 1, background: "rgba(184,74,62,0.28)" }} />
       <div style={{ padding: "4px 20px 4px 56px", display: "flex", alignItems: "center", gap: 6, fontFamily: F.serifEn, fontStyle: "italic", fontSize: 10, color: C.inkFaint, letterSpacing: "1.2px" }}>
-        <span onClick={onBack} style={{ cursor: "pointer" }}>← grimoire</span>
+        <BackLink onClick={onBack}>grimoire</BackLink>
         <span style={{ opacity: 0.5, margin: "0 2px" }}>/</span>
         <span style={{ fontFamily: F.serifCn, fontStyle: "normal", color: C.inkSoft }}>{tome?.title}</span>
         <div style={{ flex: 1 }} />
@@ -714,25 +716,25 @@ function JotDetail({ e, tome, onBack, onEdit }) {
       <div style={{ position: "sticky", bottom: 0, padding: "14px 24px 24px 56px", background: "linear-gradient(180deg, transparent, #FCFAF5 35%)", display: "flex", gap: 8, alignItems: "center" }}>
         <span style={{ fontFamily: F.serifCn, fontSize: 10, color: C.inkFaint, letterSpacing: "1px" }}>记着记着就成了设定？</span>
         <div style={{ flex: 1 }} />
+        <button type="button" onClick={onDelete} style={{ ...miniBtn, minHeight: 40, color: C.stamp, borderColor: `${C.stamp}66` }}>删除</button>
         <button style={{ padding: "8px 14px", borderRadius: 999, background: "transparent", border: `0.5px solid ${C.rule}`, fontFamily: F.serifCn, fontSize: 11, color: C.inkSoft, letterSpacing: "1.5px", cursor: "pointer" }}>↑ 升为词条</button>
       </div>
     </div>
   );
 }
 
-function EntryDetail({ entry, entries, tomes, onBack, onEdit, onRelationClick }) {
+function EntryDetail({ entry, entries, tomes, onBack, onEdit, onDelete, onRelationClick }) {
   const tome = tomes.find((x) => x.id === entry.tome);
   const T = TYPES[entry.type] || TYPES.character;
   const S = STATUS[entry.status] || STATUS.seed;
   const L = TYPE_LABELS[entry.type] || TYPE_LABELS.character;
 
-  if (entry.type === "jot") return <JotDetail e={entry} tome={tome} onBack={onBack} onEdit={onEdit} />;
+  if (entry.type === "jot") return <JotDetail e={entry} tome={tome} onBack={onBack} onEdit={onEdit} onDelete={onDelete} />;
 
   return (
     <div style={{ width: "100%", height: "100%", background: C.paper, backgroundImage: "repeating-linear-gradient(0deg, transparent 0 28px, rgba(160,120,85,0.04) 28px 29px)", overflow: "auto" }} className="phone-scroll">
       <div style={{ padding: "4px 20px 8px", display: "flex", alignItems: "center", gap: 4, fontSize: 0, color: C.inkFaint, fontFamily: F.serifEn, fontStyle: "italic", letterSpacing: "1.2px" }}>
         <BackLink onClick={onBack}>grimoire</BackLink>
-        <span onClick={onBack} style={{ cursor: "pointer" }}>← grimoire</span>
         <span style={{ opacity: 0.5, margin: "0 3px" }}>/</span>
         <span style={{ fontFamily: F.serifCn, fontStyle: "normal", color: C.inkSoft }}>{tome?.title}</span>
         <span style={{ opacity: 0.5, margin: "0 3px" }}>/</span>
@@ -813,7 +815,7 @@ function EntryDetail({ entry, entries, tomes, onBack, onEdit, onRelationClick })
       <div style={{ height: 80 }} />
       <div style={{ position: "sticky", bottom: 0, padding: "14px 20px 24px", background: `linear-gradient(180deg, transparent, ${C.paper} 30%)`, display: "flex", gap: 8 }}>
         <button onClick={onEdit} style={{ flex: 1, padding: 12, borderRadius: 999, background: C.ink, color: C.cream, border: "none", fontFamily: F.serifCn, fontSize: 13, letterSpacing: "3px", cursor: "pointer" }}>继续写 · edit</button>
-        <button style={{ padding: "12px 16px", borderRadius: 999, background: "transparent", border: `0.5px solid ${C.rule}`, fontFamily: F.serifCn, fontSize: 12, color: C.inkSoft, letterSpacing: "1px", cursor: "pointer" }}>···</button>
+        <button type="button" onClick={onDelete} style={{ minWidth: 56, minHeight: 44, padding: "0 14px", borderRadius: 999, background: "transparent", border: `0.5px solid ${C.stamp}66`, fontFamily: F.serifCn, fontSize: 12, color: C.stamp, letterSpacing: "1px", cursor: "pointer" }}>删除</button>
       </div>
     </div>
   );
@@ -1222,6 +1224,30 @@ export default function GrimoireApp() {
     }
   }, [entries]);
 
+  const deleteTome = useCallback(async (tome) => {
+    if (!tome || !window.confirm(`删除「${tome.title}」及其全部词条？此操作无法撤销。`)) return;
+    try {
+      await apiFetch(`/api/grimoire/tomes/${encodeURIComponent(tome.id)}`, { method: "DELETE" });
+    } catch {
+      // Keep the local fallback usable when the API is unavailable.
+    }
+    setTomes((current) => current.filter((item) => item.id !== tome.id));
+    setEntries((current) => current.filter((item) => item.tome !== tome.id));
+    goHome();
+  }, [goHome]);
+
+  const deleteEntry = useCallback(async (entry) => {
+    if (!entry || !window.confirm(`删除「${entry.title}」？此操作无法撤销。`)) return;
+    try {
+      await apiFetch(`/api/grimoire/entries/${encodeURIComponent(entry.id)}`, { method: "DELETE" });
+    } catch {
+      // Keep the local fallback usable when the API is unavailable.
+    }
+    setEntries((current) => current.filter((item) => item.id !== entry.id));
+    setTomes((current) => current.map((tome) => tome.id === entry.tome ? { ...tome, count: Math.max(0, Number(tome.count || 0) - 1) } : tome));
+    goTome(entry.tome);
+  }, [goTome]);
+
   const uploadAttachment = useCallback(async (entry, file) => {
     return uploadMediaFile(file, {
       type: "other",
@@ -1246,7 +1272,7 @@ export default function GrimoireApp() {
             {[{id:"spreads",cn:"封面"},{id:"bookshelf",cn:"书架"},{id:"index",cn:"索引"}].map((v) => {
               const on = homeVariant === v.id;
               return (
-                <button key={v.id} onClick={() => setHomeVariant(v.id)} style={{ padding: "4px 12px", borderRadius: 999, border: "none", background: on ? C.ink : "transparent", color: on ? C.cream : C.inkFaint, fontFamily: F.serifCn, fontSize: 10, letterSpacing: "1.5px", cursor: "pointer" }}>{v.cn}</button>
+              <button key={v.id} onClick={() => setHomeVariant(v.id)} style={{ minHeight: 44, padding: "4px 12px", borderRadius: 999, border: "none", background: on ? C.ink : "transparent", color: on ? C.cream : C.inkFaint, fontFamily: F.serifCn, fontSize: 10, letterSpacing: "1.5px", cursor: "pointer" }}>{v.cn}</button>
               );
             })}
           </div>
@@ -1258,10 +1284,10 @@ export default function GrimoireApp() {
         </div>
       )}
       {nav.screen === "tome" && currentTome && (
-        <TomeScreen tome={currentTome} entries={entries} tomes={tomes} density={density} onBack={goHome} onEntry={goEntry} onCreateEntry={() => createEntry(currentTome.id)} />
+        <TomeScreen tome={currentTome} entries={entries} tomes={tomes} density={density} onBack={goHome} onEntry={goEntry} onCreateEntry={() => createEntry(currentTome.id)} onDeleteTome={() => deleteTome(currentTome)} />
       )}
       {nav.screen === "entry" && currentEntry && (
-        <EntryDetail entry={currentEntry} entries={entries} tomes={tomes} onBack={goBack} onEdit={goEdit} onRelationClick={goEntry} />
+        <EntryDetail entry={currentEntry} entries={entries} tomes={tomes} onBack={goBack} onEdit={goEdit} onDelete={() => deleteEntry(currentEntry)} onRelationClick={goEntry} />
       )}
       {nav.screen === "edit" && currentEntry && (
         <EntryEditFixed entry={currentEntry} entries={entries} tomes={tomes} onBack={goBack} onSave={saveEntry} onUploadAttachment={uploadAttachment} />

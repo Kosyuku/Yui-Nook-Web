@@ -819,7 +819,7 @@ function PaperInput({ value, onChange, placeholder = "", multiline = false, auto
 }
 
 function MemoryPanel({ memories, books, apiBase = "", agentNames = {}, onLoad }) {
-  const [amberView, setAmberView] = useState("list");
+  const [amberView, setAmberView] = useState("stats");
   const [constellationSelectedId, setConstellationSelectedId] = useState("");
   const [filter, setFilter] = useState("all");
   const [visibilityFilter, setVisibilityFilter] = useState("all");
@@ -936,14 +936,14 @@ function MemoryPanel({ memories, books, apiBase = "", agentNames = {}, onLoad })
   }
 
   return (
-    <div style={{ height: "100%", minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "10px 20px calc(110px + env(safe-area-inset-bottom, 0px))", background: "#faf9f7", fontFamily: F.serifCn, color: "#3b3633" }}>
+    <div style={{ height: "100%", minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "10px 20px calc(110px + env(safe-area-inset-bottom, 0px))", background: amberView === "stats" ? "#080a1b" : "#faf9f7", fontFamily: F.serifCn, color: amberView === "stats" ? "#f3eef1" : "#3b3633", transition: "background .24s ease, color .24s ease" }}>
       <header style={{ padding: "0 4px 10px" }}>
         <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", marginBottom: amberView === "stats" ? 10 : 18 }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-            <h1 style={{ fontFamily: F.serifEn, fontSize: 42, fontStyle: "italic", fontWeight: 500, color: "#3b3633", margin: 0, lineHeight: 1, letterSpacing: "0.02em" }}>Amber</h1>
-            <span style={{ fontSize: 14, color: "rgba(160,150,145,0.8)", letterSpacing: "0.2em" }}>{amberView === "stats" ? "统计" : "语珀"}</span>
+            <h1 style={{ fontFamily: F.serifEn, fontSize: 42, fontStyle: "italic", fontWeight: 500, color: amberView === "stats" ? "#f6f1ed" : "#3b3633", margin: 0, lineHeight: 1, letterSpacing: "0.02em" }}>Amber</h1>
+            <span style={{ fontSize: 14, color: amberView === "stats" ? "rgba(210,203,221,.64)" : "rgba(160,150,145,0.8)", letterSpacing: "0.2em" }}>{amberView === "stats" ? "星图" : "语珀"}</span>
           </div>
-          <button onClick={() => setAmberView(amberView === "stats" ? "list" : "stats")} aria-label="切换记忆视图" style={{ position: "absolute", right: 24, top: 22, width: 34, height: 34, border: "0.5px solid rgba(210,200,195,0.8)", borderRadius: "50%", background: "rgba(255,255,255,0.42)", color: "#5c5550", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <button onClick={() => setAmberView(amberView === "stats" ? "list" : "stats")} aria-label="切换记忆视图" style={{ position: "absolute", right: 24, top: 22, width: 44, height: 44, border: amberView === "stats" ? "1px solid rgba(255,255,255,.18)" : "0.5px solid rgba(210,200,195,0.8)", borderRadius: "50%", background: amberView === "stats" ? "rgba(255,255,255,.08)" : "rgba(255,255,255,0.42)", color: amberView === "stats" ? "#f5ead8" : "#5c5550", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             {amberView === "stats" ? <AmberListIcon /> : <AmberStatsIcon />}
           </button>
         </div>
@@ -1151,7 +1151,7 @@ function MemoryConstellation({ memories, agentNames, selectedId, onSelect }) {
     .sort((a, b) => (b.importance - a.importance) || (b.temperature - a.temperature) || (b.touch_count - a.touch_count) || new Date(b.dateISO || 0) - new Date(a.dateISO || 0))
     .slice(0, CONSTELLATION_SLOTS.length);
   const focus = nodes.find((memory) => memory.id === selectedId) || null;
-  if (!nodes.length) return <AmberModule title="记忆星图"><p style={amberEmptyTextStyle}>还没有可连成星图的记忆</p></AmberModule>;
+  if (!nodes.length) return <div style={{ position: "relative", minHeight: 360, display: "grid", placeItems: "center", overflow: "hidden", borderRadius: 18, border: "1px solid rgba(218,228,255,.14)", color: "rgba(224,231,250,.58)", background: "radial-gradient(circle at 55% 62%, rgba(74,94,174,.32), transparent 29%), radial-gradient(circle at 16% 18%, rgba(195,171,255,.15), transparent 25%), #080a1d", fontSize: 13, letterSpacing: "0.12em" }}><div aria-hidden="true" style={{ position: "absolute", inset: 0, opacity: .84, backgroundImage: "radial-gradient(circle at 9% 21%, #fff 0 1px, transparent 1.7px), radial-gradient(circle at 17% 72%, rgba(201,216,255,.9) 0 1px, transparent 1.7px), radial-gradient(circle at 31% 36%, rgba(255,239,199,.94) 0 1.3px, transparent 2px), radial-gradient(circle at 47% 17%, #fff 0 1px, transparent 1.7px), radial-gradient(circle at 61% 48%, rgba(201,216,255,.95) 0 1px, transparent 1.7px), radial-gradient(circle at 76% 26%, #fff 0 1px, transparent 1.8px), radial-gradient(circle at 88% 73%, rgba(255,239,199,.85) 0 1px, transparent 1.8px), radial-gradient(circle at 94% 12%, #fff 0 1px, transparent 1.7px)" }} /><span style={{ position: "relative", zIndex: 1, padding: "12px 18px", border: "1px solid rgba(255,255,255,.12)", borderRadius: 999, background: "rgba(7,9,28,.46)", backdropFilter: "blur(8px)" }}>还没有可连成星图的记忆</span></div>;
 
   const positions = new Map(nodes.map((memory, index) => [memory.id, CONSTELLATION_SLOTS[index]]));
   const edges = [];
@@ -1162,39 +1162,38 @@ function MemoryConstellation({ memories, agentNames, selectedId, onSelect }) {
   const neighbors = focus ? edges.filter((edge) => edge.left.id === focus.id || edge.right.id === focus.id).map((edge) => edge.left.id === focus.id ? edge.right : edge.left) : [];
 
   return (
-    <AmberModule title="记忆星图" badge={`${nodes.length} nodes`}>
-      <div style={{ padding: "11px 12px 14px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, margin: "0 2px 9px", color: "rgba(105,95,82,.64)", fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace", fontSize: 10, letterSpacing: ".04em" }}>
-          <span>NETWORK · {edges.length} LINKS</span>
-          {focus && <button type="button" onClick={() => onSelect("")} style={{ border: 0, padding: 0, background: "transparent", color: "rgba(160,118,49,.86)", font: "inherit", cursor: "pointer" }}>RETURN TO GLOBAL</button>}
-        </div>
-        <div style={{ position: "relative", height: 286, overflow: "hidden", borderRadius: 12, background: "#ebe6d9", boxShadow: "inset 5px 5px 13px rgba(85,80,62,.2), inset -4px -4px 10px rgba(255,255,255,.35), 0 0 0 7px rgba(255,255,255,.42)" }}>
-          <div aria-hidden="true" style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(110,101,80,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(110,101,80,.12) 1px, transparent 1px)", backgroundSize: "26px 26px", opacity: .68 }} />
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
-            {edges.map((edge) => {
-              const [x1, y1] = positions.get(edge.left.id);
-              const [x2, y2] = positions.get(edge.right.id);
-              const active = focus && (edge.left.id === focus.id || edge.right.id === focus.id);
-              return <line key={`${edge.left.id}-${edge.right.id}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(100,88,60,.72)" strokeOpacity={active ? .76 : .22} strokeWidth={active ? 1.05 : .48} />;
-            })}
-          </svg>
-          {nodes.map((memory) => {
-            const [left, top] = positions.get(memory.id);
-            const active = focus?.id === memory.id;
-            const adjacent = focus && neighbors.some((neighbor) => neighbor.id === memory.id);
-            const radius = Math.max(8, Math.min(15, 7 + Math.sqrt(Math.max(memory.importance, memory.temperature, 1)) * 1.4));
-            return <button key={memory.id} type="button" onClick={() => onSelect(active ? "" : memory.id)} title={memory.summary} aria-label={`聚焦记忆：${memory.summary}`} style={{ position: "absolute", left: `${left}%`, top: `${top}%`, width: radius * 2, height: radius * 2, transform: "translate(-50%, -50%)", borderRadius: "50%", border: active ? "1.5px solid rgba(180,138,40,.92)" : `1px solid ${constellationColor(memory)}88`, background: active ? "rgba(180,138,40,.94)" : constellationColor(memory), boxShadow: active ? "0 0 0 7px rgba(180,138,40,.17), 0 0 18px rgba(180,138,40,.38)" : adjacent ? `0 0 11px ${constellationColor(memory)}88` : "none", opacity: !focus || active || adjacent ? 1 : .35, cursor: "pointer", padding: 0, transition: "opacity .16s ease, box-shadow .16s ease" }} />;
-          })}
-          {focus && (() => {
-            const [left, top] = positions.get(focus.id);
-            return <div style={{ position: "absolute", left: `${left}%`, top: `calc(${top}% + 20px)`, transform: "translateX(-50%)", width: 148, pointerEvents: "none", textAlign: "center", color: "rgba(88,70,42,.9)", fontFamily: F.serifCn, fontSize: 11, lineHeight: 1.35, textShadow: "0 1px rgba(255,255,255,.72)" }}>{focus.summary.length > 26 ? `${focus.summary.slice(0, 26)}…` : focus.summary}</div>;
-          })()}
-        </div>
-        <div style={{ marginTop: 16, padding: "9px 12px", borderRadius: 9, background: "#ebe6d9", boxShadow: "inset 2px 2px 6px rgba(85,80,62,.16), inset -2px -2px 5px rgba(255,255,255,.28)", color: "rgba(84,77,60,.76)", fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace", fontSize: 10, lineHeight: 1.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {focus ? `FOCUS · ${agentNames.get(focus.person) || focus.agent_id} · ${focus.type} · ${neighbors.length} NEIGHBORS` : "SYSTEM READY · 点击节点展开关联记忆"}
-        </div>
+    <section style={{ position: "relative", minHeight: 446, overflow: "hidden", borderRadius: 18, border: "1px solid rgba(218,228,255,.16)", background: "radial-gradient(circle at 50% 57%, rgba(61,80,148,.38), transparent 28%), radial-gradient(circle at 12% 94%, rgba(111,68,143,.22), transparent 34%), linear-gradient(155deg, #060817 0%, #0b102b 52%, #101230 100%)", boxShadow: "inset 0 1px rgba(255,255,255,.07), 0 24px 50px rgba(5,7,24,.36)" }}>
+      <div aria-hidden="true" style={{ position: "absolute", inset: 0, opacity: .72, backgroundImage: "radial-gradient(circle at 8% 18%, rgba(255,255,255,.84) 0 1px, transparent 1.6px), radial-gradient(circle at 22% 64%, rgba(190,211,255,.75) 0 1px, transparent 1.8px), radial-gradient(circle at 42% 12%, rgba(255,255,255,.7) 0 1px, transparent 1.8px), radial-gradient(circle at 67% 27%, rgba(245,225,186,.68) 0 1px, transparent 1.7px), radial-gradient(circle at 84% 75%, rgba(197,215,255,.7) 0 1px, transparent 1.8px), radial-gradient(circle at 95% 11%, rgba(255,255,255,.7) 0 1px, transparent 1.6px)" }} />
+      <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "17px 18px 0", color: "rgba(226,232,249,.66)", fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace", fontSize: 10, letterSpacing: ".1em" }}>
+        <span>MEMORY CONSTELLATION</span>
+        <span>{nodes.length} NODES · {edges.length} LINKS</span>
       </div>
-    </AmberModule>
+      {focus && <button type="button" onClick={() => onSelect("")} style={{ position: "absolute", zIndex: 4, top: 38, right: 18, minHeight: 32, padding: "0 10px", border: "1px solid rgba(255,255,255,.15)", borderRadius: 999, background: "rgba(9,12,31,.62)", color: "rgba(244,235,220,.82)", fontFamily: F.serifEn, fontSize: 10, letterSpacing: ".12em", cursor: "pointer" }}>CLEAR FOCUS</button>}
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+        {edges.map((edge) => {
+          const [x1, y1] = positions.get(edge.left.id);
+          const [x2, y2] = positions.get(edge.right.id);
+          const active = focus && (edge.left.id === focus.id || edge.right.id === focus.id);
+          return <line key={`${edge.left.id}-${edge.right.id}`} x1={x1} y1={12 + y1 * .72} x2={x2} y2={12 + y2 * .72} stroke={active ? "#e8c891" : "#aab7e8"} strokeOpacity={active ? .92 : .24} strokeWidth={active ? 1.05 : .42} />;
+        })}
+      </svg>
+      {nodes.map((memory) => {
+        const [left, top] = positions.get(memory.id);
+        const active = focus?.id === memory.id;
+        const adjacent = focus && neighbors.some((neighbor) => neighbor.id === memory.id);
+        const radius = Math.max(9, Math.min(17, 8 + Math.sqrt(Math.max(memory.importance, memory.temperature, 1)) * 1.75));
+        const color = constellationColor(memory);
+        return <button key={memory.id} type="button" onClick={() => onSelect(active ? "" : memory.id)} title={memory.summary} aria-label={`聚焦记忆：${memory.summary}`} style={{ position: "absolute", zIndex: 3, left: `${left}%`, top: `${12 + top * .72}%`, width: radius * 2, height: radius * 2, transform: "translate(-50%, -50%)", borderRadius: "50%", border: active ? "1px solid #fff4d2" : `1px solid ${color}`, background: active ? "#f3c76d" : color, boxShadow: active ? "0 0 0 6px rgba(243,199,109,.2), 0 0 24px rgba(255,212,133,.94)" : adjacent ? `0 0 20px ${color}` : `0 0 13px ${color}AA`, opacity: !focus || active || adjacent ? 1 : .22, cursor: "pointer", padding: 0, transition: "opacity .2s ease, box-shadow .2s ease, transform .2s ease" }} />;
+      })}
+      {focus && (() => {
+        const [left, top] = positions.get(focus.id);
+        return <div style={{ position: "absolute", zIndex: 3, left: `${left}%`, top: `${17 + top * .72}%`, transform: "translateX(-50%)", width: 156, pointerEvents: "none", textAlign: "center", color: "rgba(246,241,232,.92)", fontFamily: F.serifCn, fontSize: 11, lineHeight: 1.55, textShadow: "0 2px 8px #060817" }}>{focus.summary.length > 28 ? `${focus.summary.slice(0, 28)}…` : focus.summary}</div>;
+      })()}
+      <div style={{ position: "absolute", zIndex: 3, left: 14, right: 14, bottom: 14, padding: "12px 14px", border: "1px solid rgba(255,255,255,.12)", borderRadius: 12, background: "rgba(4,7,23,.58)", backdropFilter: "blur(12px)", color: "rgba(226,232,249,.76)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: focus ? 5 : 0, fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace", fontSize: 9, letterSpacing: ".11em" }}><span style={{ color: "#f3c76d" }}>●</span>{focus ? `FOCUS · ${agentNames.get(focus.person) || focus.agent_id} · ${focus.type} · ${neighbors.length} LINKS` : "SELECT A STAR TO TRACE ITS MEMORY"}</div>
+        {focus && <div style={{ fontSize: 12, lineHeight: 1.5, color: "rgba(246,241,232,.92)" }}>{focus.summary}</div>}
+      </div>
+    </section>
   );
 }
 
