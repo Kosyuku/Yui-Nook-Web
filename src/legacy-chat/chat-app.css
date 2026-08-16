@@ -6874,32 +6874,32 @@ button.model-choice-item {
    ═══════════════════════════════════════════════════════════════ */
 
 #chat-app-root[data-theme="claude"] {
-  --_bg: linear-gradient(180deg, #faf8f4 0%, #f6f2ea 100%);
+  --_bg: linear-gradient(180deg, #faf9f5 0%, #f0eee6 100%);
   --_sf-base: rgba(255, 255, 255, .98);
-  --_sf-raised: rgba(255, 253, 249, .94);
-  --_sf-veil: rgba(255, 253, 249, .78);
-  --_sf-ghost: rgba(243, 226, 230, .70);
-  --_sf-faint: rgba(190, 176, 158, .12);
-  --_sf-hairline: rgba(42, 37, 33, .07);
-  --_tx-main: #2a2521;
-  --_tx-muted: #8a8278;
-  --_tx-faint: rgba(42, 37, 33, .45);
-  --_tx-ink: #2a2521;
+  --_sf-raised: rgba(250, 249, 245, .94);
+  --_sf-veil: rgba(250, 249, 245, .78);
+  --_sf-ghost: rgba(240, 238, 230, .72);
+  --_sf-faint: rgba(180, 170, 150, .12);
+  --_sf-hairline: rgba(25, 25, 25, .07);
+  --_tx-main: #191919;
+  --_tx-muted: #6b6862;
+  --_tx-faint: rgba(25, 25, 25, .42);
+  --_tx-ink: #191919;
   --_tx-on-accent: #fff;
-  --_bd-main: rgba(42, 37, 33, .10);
-  --_bd-soft: rgba(42, 37, 33, .07);
-  --_bd-strong: rgba(207, 138, 155, .32);
-  --_sd-sm: inset 0 1px 0 rgba(255,255,255,.68), 0 1px 2px rgba(86,68,80,.04);
-  --_sd-md: 0 1px 2px rgba(42,37,33,.04), 0 8px 22px -12px rgba(42,37,33,.12);
-  --_sd-lg: 0 16px 32px rgba(42, 37, 33, .14);
-  --_ac-main: #cf8a9b;
-  --_ac-soft: #f3e1e6;
+  --_bd-main: rgba(25, 25, 25, .10);
+  --_bd-soft: rgba(25, 25, 25, .07);
+  --_bd-strong: rgba(217, 119, 87, .32);
+  --_sd-sm: inset 0 1px 0 rgba(255,255,255,.68), 0 1px 2px rgba(60,50,40,.04);
+  --_sd-md: 0 1px 2px rgba(25,25,25,.04), 0 8px 22px -12px rgba(25,25,25,.12);
+  --_sd-lg: 0 16px 32px rgba(25, 25, 25, .14);
+  --_ac-main: #d97757;
+  --_ac-soft: #f6e7df;
   --_ac-on: #fff;
-  --_bubble-ai: rgba(255, 253, 249, .98);
-  --_bubble-user: rgba(243, 226, 230, .90);
-  --_input: rgba(255, 253, 249, .98);
-  --_send: #2a2521;
-  --_dot: rgba(190, 176, 158, .12);
+  --_bubble-ai: rgba(255, 255, 255, .98);
+  --_bubble-user: rgba(240, 238, 230, .92);
+  --_input: rgba(255, 255, 255, .98);
+  --_send: #191919;
+  --_dot: rgba(180, 170, 150, .13);
 }
 
 /* clean warm paper — faint warm dots, no pink */
@@ -7221,13 +7221,13 @@ button.model-choice-item {
 }
 
 #chat-app-root[data-theme="claude-dark"] {
-  --_bg: linear-gradient(180deg, #23211e 0%, #1c1a17 100%);
-  --_sf-base: rgba(52,48,43,.98); --_sf-raised: rgba(45,42,38,.92); --_sf-veil: rgba(48,45,41,.96); --_sf-ghost: rgba(74,58,62,.85); --_sf-faint: rgba(236,230,220,.05); --_sf-hairline: rgba(236,230,220,.08);
-  --_tx-main: #ece6dc; --_tx-muted: rgba(236,230,220,.52); --_tx-faint: rgba(236,230,220,.40); --_tx-ink: #ece6dc; --_tx-on-accent: #22201e;
-  --_bd-main: rgba(236,230,220,.12); --_bd-soft: rgba(236,230,220,.08); --_bd-strong: rgba(217,155,171,.30);
+  --_bg: linear-gradient(180deg, #262624 0%, #1f1e1d 100%);
+  --_sf-base: rgba(48,48,46,.98); --_sf-raised: rgba(42,42,40,.92); --_sf-veil: rgba(45,45,43,.96); --_sf-ghost: rgba(62,58,54,.85); --_sf-faint: rgba(245,244,239,.05); --_sf-hairline: rgba(245,244,239,.08);
+  --_tx-main: #f5f4ef; --_tx-muted: rgba(245,244,239,.55); --_tx-faint: rgba(245,244,239,.40); --_tx-ink: #f5f4ef; --_tx-on-accent: #1f1e1d;
+  --_bd-main: rgba(245,244,239,.12); --_bd-soft: rgba(245,244,239,.08); --_bd-strong: rgba(217,119,87,.34);
   --_sd-sm: 0 1px 2px rgba(0,0,0,.25); --_sd-md: 0 1px 2px rgba(0,0,0,.25), 0 8px 22px -12px rgba(0,0,0,.5); --_sd-lg: 0 16px 32px rgba(0,0,0,.56);
-  --_ac-main: #d99bab; --_ac-soft: rgba(217,155,171,.20); --_ac-on: #22201e;
-  --_bubble-ai: rgba(48,45,41,.96); --_bubble-user: rgba(74,58,62,.85); --_input: rgba(45,42,38,.96); --_send: #ece6dc; --_dot: rgba(236,230,220,.05);
+  --_ac-main: #d97757; --_ac-soft: rgba(217,119,87,.20); --_ac-on: #1f1e1d;
+  --_bubble-ai: rgba(45,45,43,.96); --_bubble-user: rgba(62,58,54,.88); --_input: rgba(42,42,40,.96); --_send: #f5f4ef; --_dot: rgba(245,244,239,.05);
 }
 
 #chat-app-root[data-theme="claude-dark"] .settings-page,
