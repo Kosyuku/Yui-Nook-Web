@@ -7454,20 +7454,35 @@ button.model-choice-item {
   background: var(--_wallpaper) center / cover no-repeat fixed;
 }
 
-/* 磨砂：所有浮层统一上模糊。这是这个主题的本体。 */
-#chat-app-root[data-theme="arcanum"] .message-bubble,
-#chat-app-root[data-theme="arcanum"] .composer-input-wrap,
-#chat-app-root[data-theme="arcanum"] .chat-list-item,
-#chat-app-root[data-theme="arcanum"] .bottom-nav,
-#chat-app-root[data-theme="arcanum"] .settings-group,
-#chat-app-root[data-theme="arcanum"] .ai-panel,
-#chat-app-root[data-theme="arcanum"] .glass-frost,
-#chat-app-root[data-theme="arcanum"] .setting-row,
-#chat-app-root[data-theme="arcanum"] .theme-choice-item,
-#chat-app-root[data-theme="arcanum"] .icon-circle,
-#chat-app-root[data-theme="arcanum"] .room-menu {
+/* 磨砂：这个主题里「凡是有底色的浮层，都必须是玻璃」。
+   逐个列类名会永远补不完（列表卡、搜索胶囊就是这么漏掉的），
+   所以按结构关键词匹配，新组件加进来也自动生效。 */
+#chat-app-root[data-theme="arcanum"] [class*="card"],
+#chat-app-root[data-theme="arcanum"] [class*="panel"],
+#chat-app-root[data-theme="arcanum"] [class*="group"],
+#chat-app-root[data-theme="arcanum"] [class*="pill"],
+#chat-app-root[data-theme="arcanum"] [class*="bubble"],
+#chat-app-root[data-theme="arcanum"] [class*="tabbar"],
+#chat-app-root[data-theme="arcanum"] [class*="bottom-nav"],
+#chat-app-root[data-theme="arcanum"] [class*="list-item"],
+#chat-app-root[data-theme="arcanum"] [class*="setting-row"],
+#chat-app-root[data-theme="arcanum"] [class*="sheet"],
+#chat-app-root[data-theme="arcanum"] [class*="menu"],
+#chat-app-root[data-theme="arcanum"] [class*="chip"],
+#chat-app-root[data-theme="arcanum"] [class*="glass"],
+#chat-app-root[data-theme="arcanum"] [class*="tab"],
+#chat-app-root[data-theme="arcanum"] [class*="circle"],
+#chat-app-root[data-theme="arcanum"] .chat-page-header,
+#chat-app-root[data-theme="arcanum"] .composer-input-wrap {
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
   backdrop-filter: blur(20px) saturate(1.4);
+}
+
+/* 头像是照片，不能被模糊糊掉 */
+#chat-app-root[data-theme="arcanum"] img,
+#chat-app-root[data-theme="arcanum"] [class*="avatar"] {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 /* 顶栏那层「玻璃板」：光有 blur 没有底色，也会画出一个矩形边界，
