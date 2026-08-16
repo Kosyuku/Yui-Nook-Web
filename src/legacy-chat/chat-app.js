@@ -4479,6 +4479,24 @@
         }
     }
 
+    /** 开/关某条消息的气泡工具条。
+        原本定义在 bind() 内部，但 handleClick() 也要用它 —— 不同作用域，
+        点击气泡时会抛 ReferenceError，工具条（重 roll 那些）因此一直出不来。 */
+    function setBubbleToolsOpen(msgId) {
+        const nextId = String(msgId || '').trim();
+        state.activeBubbleToolsId = nextId || null;
+        const mountEl = root();
+        if (!mountEl) return;
+        mountEl.querySelectorAll('.bubble-bottom-tools.open').forEach((el) => {
+            el.classList.remove('open');
+        });
+        if (nextId) {
+            mountEl
+                .querySelector(`.message-row[data-msg-id="${CSS.escape(nextId)}"] .bubble-bottom-tools`)
+                ?.classList.add('open');
+        }
+    }
+
     function bind() {
         const mount = root();
         if (!mount || mount.dataset.bound === '1') return;
@@ -4489,21 +4507,6 @@
         mount.addEventListener('pointermove', handleAvatarCropperPointerMove);
         mount.addEventListener('pointerup', handleAvatarCropperPointerUp);
         mount.addEventListener('pointercancel', handleAvatarCropperPointerUp);
-
-        const setBubbleToolsOpen = (msgId) => {
-            const nextId = String(msgId || '').trim();
-            state.activeBubbleToolsId = nextId || null;
-            const mountEl = root();
-            if (!mountEl) return;
-            mountEl.querySelectorAll('.bubble-bottom-tools.open').forEach((el) => {
-                el.classList.remove('open');
-            });
-            if (nextId) {
-                mountEl
-                    .querySelector(`.message-row[data-msg-id="${CSS.escape(nextId)}"] .bubble-bottom-tools`)
-                    ?.classList.add('open');
-            }
-        };
 
         // Long-press a bubble to open the floating tools without re-rendering.
         let pressTimer;

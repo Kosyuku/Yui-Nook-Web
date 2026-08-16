@@ -6797,7 +6797,9 @@ button.model-choice-item {
   bottom: -18px;
   height: 18px;
   pointer-events: none;
-  background: linear-gradient(180deg, var(--ac-soft), var(--ac-soft));
+  background: linear-gradient(180deg,
+    var(--chrome-zone-bg, var(--ac-soft)),
+    var(--chrome-zone-bg, var(--ac-soft)));
 }
 
 /* 顶栏和输入栏的「外壳」交给主题决定：有的主题要浮起来的卡片，
@@ -7510,11 +7512,54 @@ button.model-choice-item {
 
 #chat-app-root[data-theme="arcanum"] .settings-group,
 #chat-app-root[data-theme="arcanum"] .ai-panel,
-#chat-app-root[data-theme="arcanum"] .theme-choice-item,
-#chat-app-root[data-theme="arcanum"] .chat-list-item {
+#chat-app-root[data-theme="arcanum"] .theme-choice-item {
   background: var(--sf-base);
   border: 1px solid var(--bd-soft);
+  border-radius: 16px;
   color: var(--tx-main);
+}
+
+/* 列表项：给了底色就必须给圆角，否则每行都是一块直角白板。
+   连续的行之间用发丝线分隔，比每行都描一圈边干净。 */
+#chat-app-root[data-theme="arcanum"] .chat-list-item {
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  color: var(--tx-main);
+}
+
+#chat-app-root[data-theme="arcanum"] .chat-list-item + .chat-list-item {
+  box-shadow: inset 0 1px 0 var(--bd-soft);
+}
+
+#chat-app-root[data-theme="arcanum"] .chat-list-item:active,
+#chat-app-root[data-theme="arcanum"] .chat-list-item:hover {
+  background: var(--sf-veil);
+}
+
+/* 设置行在面板里面，不该再有自己的底色和模糊 —— 那会变成一叠直角白块。
+   分隔靠发丝线，玻璃只由外层面板那一层承担。 */
+#chat-app-root[data-theme="arcanum"] .setting-row {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+#chat-app-root[data-theme="arcanum"] .setting-row + .setting-row {
+  box-shadow: inset 0 1px 0 var(--bd-soft);
+}
+
+/* 玻璃上纯白的开关看不出开还是关。关态给可见的底 + 边，开态用强调色。
+   注意只能命中 .switch-btn 这个控件本身 —— 用 [class*=switch] 会把外层
+   .switch-row 整行也涂上，那正是「一叠直角白块」的来源。 */
+#chat-app-root[data-theme="arcanum"] .switch-btn.off {
+  background: var(--sf-faint);
+  border: 1px solid var(--bd-strong);
+}
+
+#chat-app-root[data-theme="arcanum"] .switch-btn.on {
+  background: var(--ac-main);
+  border: 1px solid var(--ac-main);
 }
 
 /* 这个主题不要头像和来源徽章，画面更干净 */
