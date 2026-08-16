@@ -7425,46 +7425,85 @@ button.model-choice-item {
    靠很轻的阴影浮起来，而不是靠描边切出来。
    ──────────────────────────────────────────────────────────────── */
 #chat-app-root[data-theme="arcanum"] {
-  --_bg:
-    radial-gradient(ellipse at 50% 0%, rgba(186,214,232,.42), transparent 58%),
-    radial-gradient(ellipse at 8% 96%, rgba(206,226,224,.34), transparent 52%),
-    linear-gradient(180deg, #eef5fa 0%, #e4eef4 100%);
-  --_sf-base: rgba(255,255,255,.94); --_sf-raised: rgba(255,255,255,.84); --_sf-veil: rgba(240,248,252,.74); --_sf-ghost: rgba(214,232,242,.52); --_sf-faint: rgba(120,160,186,.12); --_sf-hairline: rgba(58,92,116,.07);
-  --_tx-main: #33454f; --_tx-muted: rgba(51,69,79,.60); --_tx-faint: rgba(51,69,79,.40); --_tx-ink: #26363f; --_tx-on-accent: #ffffff;
-  --_bd-main: rgba(58,92,116,.11); --_bd-soft: rgba(58,92,116,.07); --_bd-strong: rgba(108,158,186,.28);
-  --_sd-sm: 0 1px 2px rgba(46,78,98,.06); --_sd-md: 0 2px 4px rgba(46,78,98,.06), 0 10px 26px -14px rgba(46,78,98,.28); --_sd-lg: 0 18px 38px rgba(46,78,98,.18);
-  --_ac-main: #6c9eba; --_ac-soft: rgba(108,158,186,.16); --_ac-on: #ffffff;
-  --_bubble-ai: rgba(255,255,255,.72); --_bubble-user: rgba(203,227,240,.70); --_input: rgba(255,255,255,.62); --_send: #6c9eba; --_dot: rgba(120,160,186,.14);
-  /* 顶栏和输入栏不要外壳 —— ARCANUM 的观感来自毛玻璃本身，
-     不是再套一层半透明的框。这两层关掉，方角的底条也跟着消失。 */
+  /* 背景图层。蓝全部来自这里，玻璃本身是无色的。
+     换成 url(...) 就是真壁纸；默认给一层天光/水面的渐变顶着。 */
+  --_wallpaper:
+    radial-gradient(ellipse 120% 70% at 50% -10%, rgba(214,235,247,.95), transparent 60%),
+    radial-gradient(ellipse 90% 60% at 12% 108%, rgba(196,224,226,.85), transparent 58%),
+    radial-gradient(ellipse 70% 50% at 92% 78%, rgba(206,222,240,.70), transparent 55%),
+    linear-gradient(178deg, #dcebf5 0%, #cfe2ee 46%, #dbe9ee 100%);
+  --_bg: var(--_wallpaper);
+
+  /* 玻璃是无色的：白色半透 + 模糊，不带蓝调 */
+  --_sf-base: rgba(255,255,255,.55); --_sf-raised: rgba(255,255,255,.42); --_sf-veil: rgba(255,255,255,.32); --_sf-ghost: rgba(255,255,255,.22); --_sf-faint: rgba(255,255,255,.12); --_sf-hairline: rgba(255,255,255,.30);
+  --_tx-main: #2f3538; --_tx-muted: rgba(47,53,56,.62); --_tx-faint: rgba(47,53,56,.42); --_tx-ink: #232829; --_tx-on-accent: #fff;
+  --_bd-main: rgba(255,255,255,.42); --_bd-soft: rgba(255,255,255,.26); --_bd-strong: rgba(255,255,255,.60);
+  --_sd-sm: 0 1px 2px rgba(44,62,74,.05); --_sd-md: 0 2px 6px rgba(44,62,74,.06), 0 12px 30px -16px rgba(44,62,74,.22); --_sd-lg: 0 20px 42px rgba(44,62,74,.16);
+  --_ac-main: #6a8fa6; --_ac-soft: rgba(255,255,255,.30); --_ac-on: #fff;
+  --_bubble-ai: rgba(255,255,255,.52); --_bubble-user: rgba(255,255,255,.38); --_input: rgba(255,255,255,.42); --_send: #4d6b7d; --_dot: transparent;
+
+  /* 顶栏和输入栏不要外壳 */
   --_chrome-header-bg: transparent;
   --_chrome-header-border: transparent;
   --_chrome-header-shadow: none;
   --_chrome-zone-bg: transparent;
 }
 
-/* 毛玻璃：表面压到 60-70% 不透明，靠模糊透出背后的底色/壁纸。
-   这是霧藍和暖纸的根本区别 —— 暖纸是实心纸，霧藍是磨砂玻璃。 */
+/* 壁纸铺满整个应用，玻璃浮在它上面 */
+#chat-app-root[data-theme="arcanum"] .chat-shell {
+  background: var(--_wallpaper) center / cover no-repeat fixed;
+}
+
+/* 磨砂：所有浮层统一上模糊。这是这个主题的本体。 */
 #chat-app-root[data-theme="arcanum"] .message-bubble,
 #chat-app-root[data-theme="arcanum"] .composer-input-wrap,
 #chat-app-root[data-theme="arcanum"] .chat-list-item,
-#chat-app-root[data-theme="arcanum"] .bottom-nav {
-  -webkit-backdrop-filter: blur(18px) saturate(1.25);
-  backdrop-filter: blur(18px) saturate(1.25);
+#chat-app-root[data-theme="arcanum"] .bottom-nav,
+#chat-app-root[data-theme="arcanum"] .settings-group,
+#chat-app-root[data-theme="arcanum"] .ai-panel,
+#chat-app-root[data-theme="arcanum"] .glass-frost,
+#chat-app-root[data-theme="arcanum"] .setting-row,
+#chat-app-root[data-theme="arcanum"] .theme-choice-item,
+#chat-app-root[data-theme="arcanum"] .icon-circle,
+#chat-app-root[data-theme="arcanum"] .room-menu {
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
 }
 
-/* 和暖纸/夜纸一样，把几个大面积容器也接到 token 上 */
+/* 顶栏那层「玻璃板」：光有 blur 没有底色，也会画出一个矩形边界，
+   所以这里必须把 blur 也去掉，不然框还在。 */
+#chat-app-root[data-theme="arcanum"] .room-hero-inner {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border: none;
+}
+
+/* 纸纹是暖纸的语言，玻璃上不要 */
+#chat-app-root[data-theme="arcanum"] .room-page {
+  background-image: none;
+}
+
+/* 设置页等大面积容器也走玻璃，而不是实心白板 */
 #chat-app-root[data-theme="arcanum"] .settings-page,
 #chat-app-root[data-theme="arcanum"] .page-block,
 #chat-app-root[data-theme="arcanum"] .moments-page,
 #chat-app-root[data-theme="arcanum"] .moments-feed-wrap,
 #chat-app-root[data-theme="arcanum"] .white-canvas {
-  background: var(--sf-base);
+  background: transparent;
   color: var(--tx-main);
 }
 
-#chat-app-root[data-theme="arcanum"] .theme-choice-item {
-  background: var(--sf-raised);
-  border-color: var(--bd-main);
+#chat-app-root[data-theme="arcanum"] .settings-group,
+#chat-app-root[data-theme="arcanum"] .ai-panel,
+#chat-app-root[data-theme="arcanum"] .theme-choice-item,
+#chat-app-root[data-theme="arcanum"] .chat-list-item {
+  background: var(--sf-base);
+  border: 1px solid var(--bd-soft);
   color: var(--tx-main);
+}
+
+/* 这个主题不要头像和来源徽章，画面更干净 */
+#chat-app-root[data-theme="arcanum"] .bubble-avatar,
+#chat-app-root[data-theme="arcanum"] .message-source-badge {
+  display: none;
 }
