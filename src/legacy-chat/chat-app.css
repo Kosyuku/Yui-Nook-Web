@@ -6026,6 +6026,10 @@ button.model-choice-item {
   --chat-ui-muted: var(--tx-muted);
   --chat-ui-accent: var(--ac-main);
   --chat-ui-accent-soft: var(--ac-soft);
+  --chrome-header-bg: var(--_chrome-header-bg, var(--sf-faint));
+  --chrome-header-border: var(--_chrome-header-border, var(--bd-main));
+  --chrome-header-shadow: var(--_chrome-header-shadow, var(--sd-md));
+  --chrome-zone-bg: var(--_chrome-zone-bg, var(--ac-soft));
   --chat-ui-ai-bubble: var(--_bubble-ai);
   --chat-ui-user-bubble: var(--_bubble-user);
   --chat-ui-input: var(--_input);
@@ -6796,15 +6800,18 @@ button.model-choice-item {
   background: linear-gradient(180deg, var(--ac-soft), var(--ac-soft));
 }
 
+/* 顶栏和输入栏的「外壳」交给主题决定：有的主题要浮起来的卡片，
+   有的（霧藍）要它们直接消失、只留内容浮在背景上。
+   默认值 = 原本写死的那套，所以不设这些 token 的主题一点不变。 */
 #chat-app-root[data-theme] .chat-shell.mode-normal .room-hero-inner {
-  background: var(--sf-faint);
-  border-color: var(--bd-main);
-  box-shadow: var(--sd-md);
+  background: var(--chrome-header-bg, var(--sf-faint));
+  border-color: var(--chrome-header-border, var(--bd-main));
+  box-shadow: var(--chrome-header-shadow, var(--sd-md));
 }
 
 #chat-app-root[data-theme] .chat-shell.mode-normal .composer-zone {
   position: relative;
-  background: var(--ac-soft);
+  background: var(--chrome-zone-bg, var(--ac-soft));
 }
 
 #chat-app-root[data-theme] .chat-shell.mode-normal .composer-zone::before {
@@ -6815,7 +6822,7 @@ button.model-choice-item {
   top: -34px;
   height: 34px;
   pointer-events: none;
-  background: linear-gradient(180deg, var(--ac-soft), var(--ac-soft));
+  background: linear-gradient(180deg, transparent, var(--chrome-zone-bg, var(--ac-soft)));
 }
 
 .chat-shell .room-profile-avatar {
@@ -7427,7 +7434,23 @@ button.model-choice-item {
   --_bd-main: rgba(58,92,116,.11); --_bd-soft: rgba(58,92,116,.07); --_bd-strong: rgba(108,158,186,.28);
   --_sd-sm: 0 1px 2px rgba(46,78,98,.06); --_sd-md: 0 2px 4px rgba(46,78,98,.06), 0 10px 26px -14px rgba(46,78,98,.28); --_sd-lg: 0 18px 38px rgba(46,78,98,.18);
   --_ac-main: #6c9eba; --_ac-soft: rgba(108,158,186,.16); --_ac-on: #ffffff;
-  --_bubble-ai: rgba(255,255,255,.90); --_bubble-user: rgba(203,227,240,.88); --_input: rgba(255,255,255,.86); --_send: #6c9eba; --_dot: rgba(120,160,186,.14);
+  --_bubble-ai: rgba(255,255,255,.72); --_bubble-user: rgba(203,227,240,.70); --_input: rgba(255,255,255,.62); --_send: #6c9eba; --_dot: rgba(120,160,186,.14);
+  /* 顶栏和输入栏不要外壳 —— ARCANUM 的观感来自毛玻璃本身，
+     不是再套一层半透明的框。这两层关掉，方角的底条也跟着消失。 */
+  --_chrome-header-bg: transparent;
+  --_chrome-header-border: transparent;
+  --_chrome-header-shadow: none;
+  --_chrome-zone-bg: transparent;
+}
+
+/* 毛玻璃：表面压到 60-70% 不透明，靠模糊透出背后的底色/壁纸。
+   这是霧藍和暖纸的根本区别 —— 暖纸是实心纸，霧藍是磨砂玻璃。 */
+#chat-app-root[data-theme="arcanum"] .message-bubble,
+#chat-app-root[data-theme="arcanum"] .composer-input-wrap,
+#chat-app-root[data-theme="arcanum"] .chat-list-item,
+#chat-app-root[data-theme="arcanum"] .bottom-nav {
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+  backdrop-filter: blur(18px) saturate(1.25);
 }
 
 /* 和暖纸/夜纸一样，把几个大面积容器也接到 token 上 */
