@@ -6139,7 +6139,10 @@ button.model-choice-item {
   color: var(--chat-ui-muted);
 }
 
-#chat-app-root[data-theme] .room-page {
+/* 这条曾经无条件给聊天页铺点阵，而且带 #id 前缀，优先级压过
+   .room-page[data-room-bg=...] —— 「聊天背景」那个设置因此选了也没反应。
+   点阵现在由 data-room-bg="点阵" 负责，这里只保留一个没有纹样的兜底。 */
+#chat-app-root[data-theme] .room-page:not([data-room-bg]) {
   background-image: radial-gradient(var(--chat-ui-dot) 1.5px, transparent 1.5px);
 }
 
@@ -7498,10 +7501,9 @@ button.model-choice-item {
   border: none;
 }
 
-/* 纸纹是暖纸的语言，玻璃上不要 */
-#chat-app-root[data-theme="arcanum"] .room-page {
-  background-image: none;
-}
+/* 纸纹在霧藍下已经因为 --_dot: transparent 而不可见，不需要再写
+   background-image: none —— 那条带 #id 前缀，优先级高过
+   .room-page[data-room-bg="图片"]，会把用户设的背景图一并干掉。 */
 
 /* 设置页等大面积容器也走玻璃，而不是实心白板 */
 #chat-app-root[data-theme="arcanum"] .settings-page,
@@ -7763,4 +7765,47 @@ button.model-choice-item {
   background: var(--ac-main);
   border-color: var(--ac-main);
   color: var(--ac-on);
+}
+
+/* ── 聊天背景 ──────────────────────────────────────────────────────
+   这个设置原本存了值（点阵/小花/云彩）却没有任何规则读它，选了不生效。
+   现在挂在 .room-page[data-room-bg] 上，各主题的底色由 --dot 决定。
+   ──────────────────────────────────────────────────────────────── */
+.room-page[data-room-bg="点阵"] {
+  background-image: radial-gradient(var(--chat-ui-dot) 1.5px, transparent 1.5px);
+  background-size: 22px 22px;
+}
+
+.room-page[data-room-bg="小花"] {
+  background-image:
+    radial-gradient(var(--chat-ui-dot) 1.2px, transparent 1.2px),
+    radial-gradient(var(--chat-ui-dot) 1.2px, transparent 1.2px);
+  background-size: 34px 34px, 34px 34px;
+  background-position: 0 0, 17px 17px;
+}
+
+.room-page[data-room-bg="云彩"] {
+  background-image:
+    radial-gradient(ellipse 60% 40% at 20% 12%, var(--chat-ui-dot), transparent 70%),
+    radial-gradient(ellipse 50% 34% at 84% 44%, var(--chat-ui-dot), transparent 68%),
+    radial-gradient(ellipse 70% 40% at 40% 88%, var(--chat-ui-dot), transparent 72%);
+  background-size: cover;
+}
+
+.room-page[data-room-bg="纯色"] {
+  background-image: none;
+}
+
+/* 自定义图片：URL 由 JS 写进 --room-bg-image。
+   磨砂玻璃主题下，气泡透出的就是这张图 —— 那才是「无色玻璃 + 背景图」。 */
+.room-page[data-room-bg="图片"] {
+  background-image: var(--room-bg-image, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* 霧藍：有自定义图时，壁纸让位给它，别再叠一层蓝渐变 */
+#chat-app-root[data-theme="arcanum"] .room-page[data-room-bg="图片"] {
+  background-color: transparent;
 }

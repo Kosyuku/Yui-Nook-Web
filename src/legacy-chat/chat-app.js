@@ -2362,7 +2362,7 @@
         const messages = compactVisibleEventMessages(visibleChatMessages(conversationMessagesForContact(c)));
         const attachments = (state.chatAttachments || []).map(serializeChatAttachment).filter(Boolean);
         return `
-      <section class="room-page room-theme-${c.theme}">
+      <section class="room-page room-theme-${c.theme}" data-room-bg="${escapeHtml(c.roomBackground || '点阵')}"${c.roomBackgroundImage ? ` style="--room-bg-image:url(&quot;${escapeHtml(c.roomBackgroundImage)}&quot;)"` : ''}>
         <div class="messages-panel">
           ${messages.map((m, index) => renderMessage(m, c, messageRenderMeta(messages, index))).join('')}
         </div>
@@ -3383,6 +3383,8 @@
             { id: '点阵', desc: '当前聊天页的轻点阵背景' },
             { id: '小花', desc: '更软一点的装饰纹样' },
             { id: '云彩', desc: '偏轻雾感的背景层次' },
+            { id: '纯色', desc: '不加纹样，只留主题底色' },
+            { id: '图片', desc: '用一张自己的图当背景（磨砂玻璃主题下效果最好）' },
         ];
         return `
       <section class="settings-page page-block ai-settings-page">
@@ -3401,6 +3403,18 @@
             `).join('')}
           </div>
         </div>
+        ${current === '图片' ? `
+        <div class="settings-group glass-frost ai-panel compact-panel">
+          <h3>背景图片</h3>
+          <p class="section-eyebrow">填一个图片地址。磨砂玻璃主题（霧藍）下，气泡会透出这张图。</p>
+          <input id="room-bg-image-input" class="ai-input" type="url"
+                 value="${escapeHtml(c?.roomBackgroundImage || '')}"
+                 placeholder="https://…/wallpaper.jpg" data-plain-input="true" />
+          <div class="ai-inline-actions" style="margin-top:10px;">
+            <button class="ghost-action" data-action="save-room-bg-image">保存</button>
+            <button class="ghost-action" data-action="clear-room-bg-image">清除</button>
+          </div>
+        </div>` : ''}
       </section>
     `;
     }
@@ -5409,10 +5423,33 @@
             return;
         }
 
+        if (action === 'save-room-bg-image') {
+            const input = root()?.querySelector('#room-bg-image-input');
+            const url = String(input?.value || '').trim();
+            // 只收 http(s)，别让 javascript: 之类的进到 style 里
+            if (url && !/^https?:\/\//i.test(url)) {
+                state.toast = '请填 http(s) 开头的图片地址';
+                render();
+                window.setTimeout(() => { state.toast = ''; render(); }, 1600);
+                return;
+            }
+            updateContactField('roomBackgroundImage', url, url ? '背景图片已更新' : '背景图片已清除');
+            render();
+            return;
+        }
+
+        if (action === 'clear-room-bg-image') {
+            updateContactField('roomBackgroundImage', '', '背景图片已清除');
+            render();
+            return;
+        }
+
         if (action === 'pick-contact-room-background') {
             const value = String(target.dataset.value || '').trim();
             if (!value) return;
             updateContactField('roomBackground', value, '聊天背景已更新');
+            // 选「图片」时留在本页，好让用户接着填地址
+            if (value === '图片') { render(); return; }
             state.currentView = 'contactSettings';
             state.currentSettingsTab = 'basic';
             render();
@@ -9224,9 +9261,10 @@
             </div>`;
           }).join('')}
         </div>
-        ${candidates.length > 0 ? `
         <div class="settings-group glass-frost ai-panel compact-panel">
-          <h3>待审记忆候选 <span style="font-size:12px;font-weight:400;color:var(--muted);">· 日循环提取，可采纳或忽略</span></h3>
+          <h3>待审记忆候选 <span style="font-size:12px;font-weight:400;color:var(--muted);">· ${candidates.length} 条 · 日循环提取，可采纳或忽略</span></h3>
+          ${state.memoryServiceLoading ? '<p class="section-eyebrow">正在加载…</p>' : ''}
+          ${!state.memoryServiceLoading && !candidates.length ? '<p class="section-eyebrow">暂无待审候选。自动提取的记忆会先停在这里，采纳后才进入正式记忆。</p>' : ''}
           ${candidates.map(c => `
             <div class="theme-choice-item active" style="cursor:default; display:block;">
               <div class="theme-choice-copy" style="display:block;">
@@ -9240,7 +9278,6 @@
             </div>
           `).join('')}
         </div>
-        ` : ''}
       </section>
     `;
     }
