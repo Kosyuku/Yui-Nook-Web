@@ -7435,11 +7435,12 @@ button.model-choice-item {
 #chat-app-root[data-theme="arcanum"] {
   /* 背景图层。蓝全部来自这里，玻璃本身是无色的。
      换成 url(...) 就是真壁纸；默认给一层天光/水面的渐变顶着。 */
+  /* 没设背景图时的兜底。刻意做成近乎中性的雾白 —— 这个主题的本体是
+     「无色磨砂玻璃」，颜色应该来自用户自己的背景图，不该由主题染上。 */
   --_wallpaper:
-    radial-gradient(ellipse 120% 70% at 50% -10%, rgba(214,235,247,.95), transparent 60%),
-    radial-gradient(ellipse 90% 60% at 12% 108%, rgba(196,224,226,.85), transparent 58%),
-    radial-gradient(ellipse 70% 50% at 92% 78%, rgba(206,222,240,.70), transparent 55%),
-    linear-gradient(178deg, #dcebf5 0%, #cfe2ee 46%, #dbe9ee 100%);
+    radial-gradient(ellipse 120% 70% at 50% -10%, rgba(255,255,255,.85), transparent 62%),
+    radial-gradient(ellipse 90% 60% at 10% 106%, rgba(236,240,242,.75), transparent 58%),
+    linear-gradient(178deg, #eceef0 0%, #e6e9ec 50%, #eaecee 100%);
   --_bg: var(--_wallpaper);
 
   /* 玻璃是无色的：白色半透 + 模糊，不带蓝调 */
@@ -7554,18 +7555,9 @@ button.model-choice-item {
   box-shadow: inset 0 1px 0 var(--bd-soft);
 }
 
-/* 玻璃上纯白的开关看不出开还是关。关态给可见的底 + 边，开态用强调色。
-   注意只能命中 .switch-btn 这个控件本身 —— 用 [class*=switch] 会把外层
-   .switch-row 整行也涂上，那正是「一叠直角白块」的来源。 */
-#chat-app-root[data-theme="arcanum"] .switch-btn.off {
-  background: var(--sf-faint);
-  border: 1px solid var(--bd-strong);
-}
-
-#chat-app-root[data-theme="arcanum"] .switch-btn.on {
-  background: var(--ac-main);
-  border: 1px solid var(--ac-main);
-}
+/* 这里曾经给 .switch-btn（外层按钮）上底色和描边，但它没有圆角，
+   于是胶囊后面多出一个方块。上色的对象应该是里面的 .switch-track，
+   而那条基础规则已经按开/关分好色，这里不需要再写。 */
 
 /* 这个主题不要头像和来源徽章，画面更干净 */
 #chat-app-root[data-theme="arcanum"] .bubble-avatar,
