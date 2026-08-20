@@ -1,12 +1,14 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import DayPath from "./DayPath";
+import { apiUrl } from "./apiBase";
 
 const STORAGE_KEY = "yui_drift_events_v1";
 
 const DEFAULT_EVENTS = [
-  { id: "e1", date: "2026-03-30", title: "阿延生日", detail: "把惊喜和祝福都塞进这一天。", tag: "生日", owner: "@阿筝", coverImage: "" },
-  { id: "e2", date: "2026-03-22", title: "视频约会", detail: "隔着屏幕一起吃小蛋糕，也算认真过节。", tag: "约会", owner: "@小樱", coverImage: "" },
-  { id: "e3", date: "2026-03-10", title: "恋爱周年纪念", detail: "回看刚认识时的聊天记录，还是会偷偷心动。", tag: "纪念日", owner: "@阿澈", coverImage: "" },
-  { id: "e4", date: "2026-02-17", title: "春天的信", detail: "把没说完的话折好，夹进日历最暖的一页。", tag: "日常", owner: "@结衣", coverImage: "" },
+  { id: "e1", date: "2026-03-30", time: "", title: "阿延生日", detail: "把惊喜和祝福都塞进这一天。", tag: "生日", owner: "@阿筝", coverImage: "" },
+  { id: "e2", date: "2026-03-22", time: "20:00", title: "视频约会", detail: "隔着屏幕一起吃小蛋糕，也算认真过节。", tag: "约会", owner: "@小樱", coverImage: "" },
+  { id: "e3", date: "2026-03-10", time: "", title: "恋爱周年纪念", detail: "回看刚认识时的聊天记录，还是会偷偷心动。", tag: "纪念日", owner: "@阿澈", coverImage: "" },
+  { id: "e4", date: "2026-02-17", time: "", title: "春天的信", detail: "把没说完的话折好，夹进日历最暖的一页。", tag: "日常", owner: "@结衣", coverImage: "" },
 ];
 
 const TAG_META = {
@@ -30,6 +32,9 @@ function normalizeEvent(event) {
   return {
     ...event,
     tag: event.tag && TAG_META[event.tag] ? event.tag : "日常",
+    // 时刻是可选的：只有填了的事件才会落到 DayPath 的路上，
+    // 生日纪念日这种「哪一天」的事没有时刻，本来也不属于某一天里的某一刻
+    time: /^\d{2}:\d{2}$/.test(event.time || "") ? event.time : "",
     coverImage: event.coverImage || event.image || "",
   };
 }
@@ -90,6 +95,49 @@ function stickerTone(dateKey) {
   return tones[seed % tones.length];
 }
 
+// 本地某一天的日界换算成 UTC ISO 区间。后端不猜时区，由这里算好再传上去。
+function localDayRange(dateKey) {
+  const start = fromDateKey(dateKey);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+// 这一天路上的图钉：聊天记录（后端聚合）+ 手动录的带时刻事件（本地）。
+function useDayPins(events, dateKey) {
+  const [remote, setRemote] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const { start, end } = localDayRange(dateKey);
+    const query = new URLSearchParams({ start, end });
+    fetch(apiUrl(`/api/drift/day?${query}`))
+      .then((response) => (response.ok ? response.json() : { items: [] }))
+      .then((data) => {
+        if (!cancelled) setRemote(Array.isArray(data?.items) ? data.items : []);
+      })
+      .catch(() => {
+        // 后端没起也不该让日历跟着炸，路照画，只是没有聊天那几根钉子
+        if (!cancelled) setRemote([]);
+      });
+    return () => { cancelled = true; };
+  }, [dateKey]);
+
+  const local = useMemo(() => events
+    .filter((event) => event.date === dateKey && event.time)
+    .map((event) => ({
+      id: `event-${event.id}`,
+      ts: `${event.date}T${event.time}:00`,
+      text: event.title,
+      kind: "drift",
+    })), [events, dateKey]);
+
+  return useMemo(
+    () => [...remote, ...local].sort((a, b) => new Date(a.ts) - new Date(b.ts)),
+    [remote, local],
+  );
+}
+
 function BackIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -128,13 +176,15 @@ export default function DriftCalendarApp({ onClose }) {
   }, [cells, eventsByDate, selectedDate]);
   const dayEvents = events.filter((event) => event.date === selectedDate);
   const groups = useMemo(() => groupedEvents(events), [events]);
+  const dayPins = useDayPins(events, selectedDate);
+  const selectedDay = useMemo(() => fromDateKey(selectedDate), [selectedDate]);
 
   function changeMonth(offset) {
     setViewDate((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1));
   }
 
   function openEditor(event) {
-    setEditing(event || { id: "", date: selectedDate, title: "", detail: "", tag: "纪念日", owner: "@我", coverImage: "" });
+    setEditing(event || { id: "", date: selectedDate, time: "", title: "", detail: "", tag: "纪念日", owner: "@我", coverImage: "" });
   }
 
   function commitEvent(next) {
@@ -164,6 +214,9 @@ export default function DriftCalendarApp({ onClose }) {
 
   return (
     <main className="drift-app">
+      {/* 这一天摊成的路，铺在整个 drift 底下那层 */}
+      <DayPath items={dayPins} day={selectedDay} />
+
       <header className="drift-header">
         <span className="drift-glass" />
         <button className="drift-back" type="button" onClick={onClose} aria-label="返回">
@@ -311,7 +364,7 @@ function EventRow({ event, onClick }) {
     <article className="drift-event" onClick={onClick}>
       {event.coverImage ? <img className="drift-event-cover" src={event.coverImage} alt="" /> : null}
       <div className="drift-event-top">
-        <span>{dateLabel(event.date)}</span>
+        <span>{dateLabel(event.date)}{event.time ? ` · ${event.time}` : ""}</span>
         <b style={{ color: meta.color, backgroundColor: meta.bg }}>{event.tag}</b>
         <em>{event.owner}</em>
       </div>
@@ -347,7 +400,15 @@ function EventSheet({ event, onClose, onSave, onDelete }) {
           <b>{draft.id ? "编辑大事记" : "新建大事记"}</b>
           <button type="button" onClick={onClose}>×</button>
         </div>
-        <input type="date" value={draft.date} onChange={(event) => update("date", event.target.value)} />
+        <div className="drift-when">
+          <input type="date" value={draft.date} onChange={(event) => update("date", event.target.value)} />
+          <input
+            type="time"
+            value={draft.time || ""}
+            title="填了时刻，这件事才会出现在当天的路上"
+            onChange={(event) => update("time", event.target.value)}
+          />
+        </div>
         <input value={draft.title} placeholder="给这件事起个标题…" onChange={(event) => update("title", event.target.value)} />
         <input value={draft.owner} placeholder="@阿筝" onChange={(event) => update("owner", event.target.value)} />
         <select value={draft.tag} onChange={(event) => update("tag", event.target.value)}>

@@ -3835,6 +3835,10 @@ label,
 
 .drift-app {
   position: relative;
+  /* DayPath 那层是 z-index:-1，靠这个自成层叠上下文才会落在
+     .drift-app 自己的背景「上面」、内容「下面」。少了这行它会一路飘到
+     .phone-page 去，直接被背景吃掉。 */
+  isolation: isolate;
   height: 100%;
   min-height: 0;
   display: flex;
@@ -4325,6 +4329,15 @@ label,
   font-size: 12.5px;
   line-height: 1.5;
 }
+
+/* 日期和时刻并排。时刻是可选的，窄一点，视觉上从属于日期 */
+.drift-when {
+  display: flex;
+  gap: 8px;
+}
+
+.drift-when input[type="date"] { flex: 1 1 auto; }
+.drift-when input[type="time"] { flex: 0 0 108px; }
 
 .drift-sheet-actions {
   display: flex;
