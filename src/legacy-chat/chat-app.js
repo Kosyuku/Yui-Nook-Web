@@ -1079,6 +1079,22 @@
             .join('、');
     }
 
+    /** 把一张背景加进当前联系人的图库并选中它。 */
+    function addRoomBgToGallery(url) {
+        const c = byId(state.currentContactId);
+        if (!c || !url) return;
+        const list = Array.isArray(c.roomBackgroundGallery) ? [...c.roomBackgroundGallery] : [];
+        if (!list.includes(url)) list.unshift(url);
+        // 本地图是 data URL，攒多了会把本地存储撑爆，留最近 8 张
+        c.roomBackgroundGallery = list.slice(0, 8);
+        c.roomBackgroundImage = url;
+        c.roomBackground = '图片';
+        state.toast = '背景已更新';
+        render();
+        queueLocalSyncIfChanged(120);
+        window.setTimeout(() => { state.toast = ''; render(); }, 1200);
+    }
+
     function updateContactField(key, value, successText) {
         const c = byId(state.currentContactId);
         if (!c) return;
@@ -2044,6 +2060,7 @@
             // 一经规范化就没了 —— 表现就是「填了 URL 没反应」。
             roomBackground: String(contact.roomBackground || '点阵'),
             roomBackgroundImage: String(contact.roomBackgroundImage || ''),
+            roomBackgroundGallery: Array.isArray(contact.roomBackgroundGallery) ? contact.roomBackgroundGallery : [],
         };
     }
 
@@ -3415,18 +3432,41 @@
             `).join('')}
           </div>
         </div>
-        ${current === '图片' ? `
+        ${current === '图片' ? (() => {
+          const gallery = Array.isArray(c?.roomBackgroundGallery) ? c.roomBackgroundGallery : [];
+          const active = c?.roomBackgroundImage || '';
+          return `
         <div class="settings-group glass-frost ai-panel compact-panel">
           <h3>背景图片</h3>
-          <p class="section-eyebrow">填一个图片地址。磨砂玻璃主题（霧藍）下，气泡会透出这张图。</p>
-          <input id="room-bg-image-input" class="ai-input" type="url"
-                 value="${escapeHtml(c?.roomBackgroundImage || '')}"
-                 placeholder="https://…/wallpaper.jpg" data-plain-input="true" />
+          <p class="section-eyebrow">选本地图片，或填一个地址。磨砂玻璃主题（霧藍）下，气泡会透出这张图。</p>
           <div class="ai-inline-actions" style="margin-top:10px;">
-            <button class="ghost-action" data-action="save-room-bg-image">保存</button>
-            <button class="ghost-action" data-action="clear-room-bg-image">清除</button>
+            <button class="ghost-action" data-action="pick-room-bg-file">选择本地图片</button>
           </div>
-        </div>` : ''}
+          <input id="room-bg-image-input" class="ai-input" type="url"
+                 value="${escapeHtml(active.startsWith('data:') ? '' : active)}"
+                 placeholder="https://…/wallpaper.jpg" data-plain-input="true"
+                 style="margin-top:10px;" />
+          <div class="ai-inline-actions" style="margin-top:10px;">
+            <button class="ghost-action" data-action="save-room-bg-image">加到图库</button>
+            <button class="ghost-action" data-action="clear-room-bg-image">取消背景</button>
+          </div>
+        </div>
+        ${gallery.length ? `
+        <div class="settings-group glass-frost ai-panel compact-panel">
+          <h3>图库 <span class="section-eyebrow">· ${gallery.length} 张</span></h3>
+          <p class="section-eyebrow">点一张切换；长按/点「移除」删掉。</p>
+          <div class="room-bg-gallery">
+            ${gallery.map((url, i) => `
+              <div class="room-bg-thumb${url === active ? ' active' : ''}">
+                <button type="button" data-action="use-room-bg" data-index="${i}"
+                        style="background-image:url(&quot;${escapeHtml(url)}&quot;)"
+                        aria-label="使用第 ${i + 1} 张背景"></button>
+                <button type="button" class="room-bg-remove" data-action="remove-room-bg"
+                        data-index="${i}" aria-label="移除">×</button>
+              </div>`).join('')}
+          </div>
+        </div>` : ''}`;
+        })() : ''}
       </section>
     `;
     }
@@ -5435,6 +5475,53 @@
             return;
         }
 
+        if (action === 'pick-room-bg-file') {
+            const picker = document.createElement('input');
+            picker.type = 'file';
+            picker.accept = 'image/*';
+            picker.onchange = () => {
+                const file = picker.files && picker.files[0];
+                if (!file) return;
+                // 背景图存在本地状态里，太大的图会把 localStorage 撑爆
+                if (file.size > 3 * 1024 * 1024) {
+                    state.toast = '图片超过 3MB，换张小一点的';
+                    render();
+                    window.setTimeout(() => { state.toast = ''; render(); }, 1800);
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = () => {
+                    addRoomBgToGallery(String(reader.result || ''));
+                };
+                reader.readAsDataURL(file);
+            };
+            picker.click();
+            return;
+        }
+
+        if (action === 'use-room-bg') {
+            const c = byId(state.currentContactId);
+            const list = Array.isArray(c?.roomBackgroundGallery) ? c.roomBackgroundGallery : [];
+            const url = list[Number(target.dataset.index)];
+            if (url) updateContactField('roomBackgroundImage', url, '背景已切换');
+            return;
+        }
+
+        if (action === 'remove-room-bg') {
+            const c = byId(state.currentContactId);
+            const list = Array.isArray(c?.roomBackgroundGallery) ? [...c.roomBackgroundGallery] : [];
+            const idx = Number(target.dataset.index);
+            const [removed] = list.splice(idx, 1);
+            c.roomBackgroundGallery = list;
+            // 删掉的正好是当前用的，就退回没有背景
+            if (removed && removed === c.roomBackgroundImage) c.roomBackgroundImage = '';
+            state.toast = '已移除';
+            render();
+            queueLocalSyncIfChanged(120);
+            window.setTimeout(() => { state.toast = ''; render(); }, 1000);
+            return;
+        }
+
         if (action === 'save-room-bg-image') {
             const input = root()?.querySelector('#room-bg-image-input');
             const url = String(input?.value || '').trim();
@@ -5445,8 +5532,8 @@
                 window.setTimeout(() => { state.toast = ''; render(); }, 1600);
                 return;
             }
-            updateContactField('roomBackgroundImage', url, url ? '背景图片已更新' : '背景图片已清除');
-            render();
+            if (!url) { state.toast = '先填一个图片地址'; render(); window.setTimeout(() => { state.toast=''; render(); }, 1400); return; }
+            addRoomBgToGallery(url);
             return;
         }
 

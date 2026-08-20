@@ -7464,35 +7464,13 @@ button.model-choice-item {
   background: var(--room-bg-image, var(--_wallpaper)) center / cover no-repeat fixed;
 }
 
-/* 磨砂：这个主题里「凡是有底色的浮层，都必须是玻璃」。
-   逐个列类名会永远补不完（列表卡、搜索胶囊就是这么漏掉的），
-   所以按结构关键词匹配，新组件加进来也自动生效。 */
-#chat-app-root[data-theme="arcanum"] [class*="card"],
-#chat-app-root[data-theme="arcanum"] [class*="panel"],
-#chat-app-root[data-theme="arcanum"] [class*="group"],
-#chat-app-root[data-theme="arcanum"] [class*="pill"],
-#chat-app-root[data-theme="arcanum"] [class*="bubble"],
-#chat-app-root[data-theme="arcanum"] [class*="tabbar"],
-#chat-app-root[data-theme="arcanum"] [class*="bottom-nav"],
-#chat-app-root[data-theme="arcanum"] [class*="list-item"],
-#chat-app-root[data-theme="arcanum"] [class*="setting-row"],
-#chat-app-root[data-theme="arcanum"] [class*="sheet"],
-#chat-app-root[data-theme="arcanum"] [class*="menu"],
-#chat-app-root[data-theme="arcanum"] [class*="chip"],
-#chat-app-root[data-theme="arcanum"] [class*="glass"],
-#chat-app-root[data-theme="arcanum"] [class*="tab"],
-#chat-app-root[data-theme="arcanum"] [class*="circle"],
-#chat-app-root[data-theme="arcanum"] .chat-page-header,
+/* 只有气泡和输入胶囊做磨砂。之前把所有卡片/面板/标签都上了模糊，
+   结果每一层都在自己画一块玻璃板，叠出一堆方块和边界。
+   玻璃感由气泡承担就够了，别的层保持干净。 */
+#chat-app-root[data-theme="arcanum"] .message-bubble,
 #chat-app-root[data-theme="arcanum"] .composer-input-wrap {
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
   backdrop-filter: blur(20px) saturate(1.4);
-}
-
-/* 头像是照片，不能被模糊糊掉 */
-#chat-app-root[data-theme="arcanum"] img,
-#chat-app-root[data-theme="arcanum"] [class*="avatar"] {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
 }
 
 /* 顶栏那层「玻璃板」：光有 blur 没有底色，也会画出一个矩形边界，
@@ -7500,7 +7478,9 @@ button.model-choice-item {
 #chat-app-root[data-theme="arcanum"] .room-hero-inner {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+  background: transparent;
   border: none;
+  box-shadow: none;
 }
 
 /* 纸纹在霧藍下已经因为 --_dot: transparent 而不可见，不需要再写
@@ -7633,19 +7613,20 @@ button.model-choice-item {
 }
 
 /* 短消息要贴着内容走。气泡本身设 fit-content 不够 —— 外层 wrap 是 flex
-   item，会先按 flex-basis 收缩，气泡只能在收缩后的宽度里折行。
-   所以要让 col 占满整行、wrap 自己 fit-content。 */
-#chat-app-root[data-theme="claude"] .message-row.from-user .message-bubble-col {
+   item，会先按 flex-basis 收缩，气泡只能在收缩后的宽度里折行，
+   一个「嗯」字会被压成竖排。所以让 col 占满整行、wrap 自己 fit-content。
+   这不是某个主题的偏好，是所有主题都该有的行为。 */
+#chat-app-root[data-theme] .message-row.from-user .message-bubble-col {
   width: 100%;
   align-items: flex-end;
 }
 
-#chat-app-root[data-theme="claude"] .message-row.from-user .message-bubble-wrap {
+#chat-app-root[data-theme] .message-row.from-user .message-bubble-wrap {
   width: fit-content;
   min-width: 0;
 }
 
-#chat-app-root[data-theme="claude"] .message-bubble.from-user {
+#chat-app-root[data-theme] .message-bubble.from-user {
   width: fit-content;
   max-width: 100%;
 }
@@ -7764,24 +7745,41 @@ button.model-choice-item {
    这个设置原本存了值（点阵/小花/云彩）却没有任何规则读它，选了不生效。
    现在挂在 .room-page[data-room-bg] 上，各主题的底色由 --dot 决定。
    ──────────────────────────────────────────────────────────────── */
-.room-page[data-room-bg="点阵"] {
-  background-image: radial-gradient(var(--chat-ui-dot) 1.5px, transparent 1.5px);
-  background-size: 22px 22px;
+/* 三个预设原本都画同一种点、用同一个 --dot，所以看起来毫无区别。
+   现在各有各的纹样和奶油色调。这几个色是预设自身的身份，不随主题变，
+   所以走 --st-* 私有段声明（lint 只允许这里写字面色）。 */
+:root {
+  --st-preset-dot: rgba(196, 176, 148, .34);
+  --st-preset-petal: rgba(212, 176, 160, .30);
+  --st-preset-cloud-a: rgba(232, 214, 190, .55);
+  --st-preset-cloud-b: rgba(226, 208, 196, .48);
+  --st-preset-cloud-c: rgba(236, 222, 200, .50);
+  --st-preset-cloud-d: rgba(224, 210, 188, .42);
 }
 
+.room-page[data-room-bg="点阵"] {
+  background-image: radial-gradient(var(--st-preset-dot) 1.6px, transparent 1.6px);
+  background-size: 20px 20px;
+}
+
+/* 小花：四个点围成一朵，比点阵软 */
 .room-page[data-room-bg="小花"] {
   background-image:
-    radial-gradient(var(--chat-ui-dot) 1.2px, transparent 1.2px),
-    radial-gradient(var(--chat-ui-dot) 1.2px, transparent 1.2px);
-  background-size: 34px 34px, 34px 34px;
-  background-position: 0 0, 17px 17px;
+    radial-gradient(var(--st-preset-petal) 2px, transparent 2px),
+    radial-gradient(var(--st-preset-petal) 2px, transparent 2px),
+    radial-gradient(var(--st-preset-petal) 2px, transparent 2px),
+    radial-gradient(var(--st-preset-petal) 2px, transparent 2px);
+  background-size: 46px 46px;
+  background-position: 16px 23px, 30px 23px, 23px 16px, 23px 30px;
 }
 
+/* 云彩：大团晕开的暖雾，没有点 */
 .room-page[data-room-bg="云彩"] {
   background-image:
-    radial-gradient(ellipse 60% 40% at 20% 12%, var(--chat-ui-dot), transparent 70%),
-    radial-gradient(ellipse 50% 34% at 84% 44%, var(--chat-ui-dot), transparent 68%),
-    radial-gradient(ellipse 70% 40% at 40% 88%, var(--chat-ui-dot), transparent 72%);
+    radial-gradient(ellipse 46% 30% at 18% 14%, var(--st-preset-cloud-a), transparent 68%),
+    radial-gradient(ellipse 40% 26% at 82% 38%, var(--st-preset-cloud-b), transparent 66%),
+    radial-gradient(ellipse 52% 30% at 42% 76%, var(--st-preset-cloud-c), transparent 70%),
+    radial-gradient(ellipse 34% 22% at 92% 90%, var(--st-preset-cloud-d), transparent 64%);
   background-size: cover;
 }
 
@@ -7820,4 +7818,52 @@ button.model-choice-item {
 /* 顶栏在整屏背景上也要是玻璃，不能是不透明的一条 */
 .chat-shell[data-shell-bg="image"] .room-hero {
   background: transparent;
+}
+
+/* ── 背景图库 ──────────────────────────────────────────────────── */
+.room-bg-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.room-bg-thumb {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1.5px solid var(--bd-soft);
+}
+
+.room-bg-thumb.active {
+  border-color: var(--ac-main);
+  box-shadow: var(--sd-sm);
+}
+
+.room-bg-thumb > button[data-action="use-room-bg"] {
+  width: 100%;
+  height: 100%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--sf-ghost);
+}
+
+.room-bg-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  background: var(--sf-base);
+  color: var(--tx-main);
+  box-shadow: var(--sd-sm);
 }
