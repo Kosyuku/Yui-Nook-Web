@@ -7567,3 +7567,93 @@ button.model-choice-item {
 #chat-app-root[data-theme="arcanum"] .message-source-badge {
   display: none;
 }
+
+/* ── 暖纸·Claude 的版式 ────────────────────────────────────────────
+   Claude 官方界面的标志性做法：**AI 说的话不是气泡**，就是页面正文。
+   只有用户的话才是气泡。长回复因此读起来像在读一封信，而不是刷聊天记录。
+   ──────────────────────────────────────────────────────────────── */
+
+/* AI 气泡拆掉：没有底色、没有描边、没有阴影，正文直接落在纸上 */
+#chat-app-root[data-theme="claude"] .message-bubble.from-ai {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 2px 0 0;
+}
+
+/* 没有气泡框住，正文就该用满整行 */
+#chat-app-root[data-theme="claude"] .message-row.from-ai .message-bubble-wrap {
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* 行距放松。气泡里可以挤，正文不行。 */
+#chat-app-root[data-theme="claude"] .message-row.from-ai .message-text {
+  line-height: 1.78;
+  letter-spacing: .012em;
+}
+
+#chat-app-root[data-theme="claude"] .message-row.from-ai .message-text p + p {
+  margin-top: .85em;
+}
+
+/* 旁白/引用：左侧竖线 + 缩进，而不是又一个气泡 */
+#chat-app-root[data-theme="claude"] .message-text blockquote {
+  margin: .9em 0;
+  padding: .1em 0 .1em 1em;
+  border-left: 2px solid var(--bd-strong);
+  color: var(--tx-muted);
+  font-style: normal;
+}
+
+/* 用户气泡保留，但收敛一点，让它退到 AI 正文后面 */
+#chat-app-root[data-theme="claude"] .message-bubble.from-user {
+  border: none;
+  box-shadow: var(--sd-sm);
+}
+
+/* 段落之间的呼吸；AI 一段说完到下一段要有停顿感 */
+#chat-app-root[data-theme="claude"] .message-row.from-ai + .message-row.from-ai {
+  margin-top: 1.1em;
+}
+
+/* 输入栏那层多余的底也去掉，和参考一致：一条干净的胶囊 */
+#chat-app-root[data-theme="claude"] {
+  --_chrome-zone-bg: transparent;
+}
+
+/* 正文没有气泡框着，就得自己留出左右边距，不然贴着屏幕边 */
+#chat-app-root[data-theme="claude"] .message-row.from-ai .message-bubble.from-ai {
+  padding: 2px 4px 0 2px;
+}
+
+/* 短消息不该被 min-width 撑开后再硬折行。
+   气泡应该贴着内容走，一句话就是一行。 */
+#chat-app-root[data-theme="claude"] .message-row.from-user .message-bubble-wrap {
+  min-width: 0;
+}
+
+/* 短消息要贴着内容走。气泡本身设 fit-content 不够 —— 外层 wrap 是 flex
+   item，会先按 flex-basis 收缩，气泡只能在收缩后的宽度里折行。
+   所以要让 col 占满整行、wrap 自己 fit-content。 */
+#chat-app-root[data-theme="claude"] .message-row.from-user .message-bubble-col {
+  width: 100%;
+  align-items: flex-end;
+}
+
+#chat-app-root[data-theme="claude"] .message-row.from-user .message-bubble-wrap {
+  width: fit-content;
+  min-width: 0;
+}
+
+#chat-app-root[data-theme="claude"] .message-bubble.from-user {
+  width: fit-content;
+  max-width: 100%;
+}
+
+/* 引用竖线再明显一点，现在太淡了几乎看不出是引用 */
+#chat-app-root[data-theme="claude"] .message-text blockquote {
+  border-left-color: var(--ac-main);
+  opacity: .88;
+}
