@@ -333,12 +333,12 @@
             .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '')
             // Remove any still-open (streaming) tool_call block trailing at end
             .replace(/<tool_call>[\s\S]*$/, '')
-            // 娓呯悊宸ュ叿娴侀噷甯歌鐨?HTML/XML 鏍囩纰庣墖
+            // 娓呯悊宸ュ叿娴侀噷甯歌鐨?HTML/XML 鏍囩碎片
             .replace(/<\/?(thead|tbody|tr|td|th|table|tool|function|call)[^>]*>/gi, '')
             .replace(/<[^>\n]{1,80}>/g, '')
             // Collapse runs of 3+ newlines
             .replace(/\n{3,}/g, '\n\n')
-            // 鍗曡閲屽彧鏈?JSON 鏍囩偣/纰庣墖鐨勮锛堝噺杞诲伓鍙戜贡鐮佽锛?            .replace(/^\s*[\][}{"',\d.\s]+\s*$/gm, '')
+            // 鍗曡閲屽彧鏈?JSON 标点/碎片鐨勮锛堝噺杞诲伓鍙戜贡鐮佽锛?            .replace(/^\s*[\][}{"',\d.\s]+\s*$/gm, '')
             .trim();
     }
 
@@ -384,7 +384,7 @@
         return new Promise((resolve) => requestAnimationFrame(resolve));
     }
 
-    /** 娴佸紡鏃舵鏂囩敤 textContent 琛ヤ竵锛屽繀椤绘妸鎬濊€冨尯涓€璧峰埛鏂帮紝鍚﹀垯浼氬崱鍦ㄨ妭娴佸墠鐨勬棫鐗囨 */
+    /** 娴佸紡鏃舵文用 textContent 琛ヤ竵锛屽繀椤绘妸鎬濊€冨尯涓€璧峰埛鏂帮紝鍚﹀垯浼氬崱鍦ㄨ妭娴佸墠鐨勬棫鐗囨 */
     function patchStreamingMessageDom(msgId, fullText, fullThinking) {
         const row = root()?.querySelector(`.message-row[data-msg-id="${msgId}"]`);
         if (!row) return;
@@ -924,7 +924,7 @@
             return {
                 author_type: 'agent',
                 author_id: contact?.id || state.currentContactId || 'default',
-                author_name: contact?.name || '褰撳墠瑙掕壊',
+                author_name: contact?.name || '当前角色',
                 avatar: contact?.avatar || '',
             };
         }
@@ -973,7 +973,7 @@
         if (moment.author_type === 'agent') {
             const contact = byId(moment.author_id);
             return {
-                name: contact?.name || moment.author_id || '瑙掕壊',
+                name: contact?.name || moment.author_id || '角色',
                 avatar: contact?.avatar || '',
             };
         }
@@ -2149,7 +2149,7 @@
         } catch (error) {
             console.warn('[rp] load rooms failed', error);
             if (!silent) {
-                state.toast = 'RP 鎴块棿鍔犺浇澶辫触';
+                state.toast = 'RP 房间加载失败';
                 render();
                 window.setTimeout(() => { state.toast = ''; render(); }, 1200);
             }
@@ -2186,7 +2186,7 @@
             console.warn('[rp] load messages failed', error);
             state.currentRpMessages = (state.rpMessages?.[roomId] || []).map(contactMessageFromStored);
             if (!silent) {
-                state.toast = 'RP 娑堟伅鍔犺浇澶辫触';
+                state.toast = 'RP 消息加载失败';
                 render();
                 window.setTimeout(() => { state.toast = ''; render(); }, 1200);
             }
@@ -2588,7 +2588,7 @@
           </div>
           <div class="ai-chip-row" style="position:absolute;left:18px;bottom:14px;z-index:2;">
             <button class="ai-chip ${state.momentsActorType === 'user' ? 'active' : ''}" data-action="set-moments-actor" data-actor-type="user">浠ユ垜</button>
-            <button class="ai-chip ${state.momentsActorType === 'agent' ? 'active' : ''}" data-action="set-moments-actor" data-actor-type="agent">浠?{escapeHtml(currentAgent?.name || '褰撳墠瑙掕壊')}</button>
+            <button class="ai-chip ${state.momentsActorType === 'agent' ? 'active' : ''}" data-action="set-moments-actor" data-actor-type="agent">浠?{escapeHtml(currentAgent?.name || '当前角色')}</button>
           </div>
           <button type="button" class="icon-btn cover-camera-btn" data-action="new-moment" aria-label="\u53d1\u670b\u53cb\u5708"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4.6c.86 2.2 1.95 3.49 3.52 4.34 1.27.68 2.62 1 4.55 1.11-.68.18-1.14.32-1.76.58-2.68 1.14-4.23 2.84-5.34 5.96-.25.72-.35 1.04-.55 1.93-.18-.76-.28-1.08-.49-1.73-1.09-3.16-2.65-4.89-5.33-6.11-.71-.32-1.22-.49-2-.67 1.99-.12 3.38-.46 4.65-1.17 1.49-.84 2.53-2.1 3.41-4.24Z" fill="currentColor"/></svg></button>
         </div>
@@ -2715,9 +2715,9 @@
           </div>
           <div class="ai-chip-row" style="position:absolute;left:18px;bottom:14px;z-index:2;">
             <button class="ai-chip ${state.momentsActorType === 'user' ? 'active' : ''}" data-action="set-moments-actor" data-actor-type="user">浠ユ垜</button>
-            <button class="ai-chip ${state.momentsActorType === 'agent' ? 'active' : ''}" data-action="set-moments-actor" data-actor-type="agent">浠?{escapeHtml(currentAgent?.name || '褰撳墠瑙掕壊')}</button>
+            <button class="ai-chip ${state.momentsActorType === 'agent' ? 'active' : ''}" data-action="set-moments-actor" data-actor-type="agent">浠?{escapeHtml(currentAgent?.name || '当前角色')}</button>
           </div>
-          <button type="button" class="icon-btn cover-camera-btn" data-action="new-moment" aria-label="鍙戞湅鍙嬪湀"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4.6c.86 2.2 1.95 3.49 3.52 4.34 1.27.68 2.62 1 4.55 1.11-.68.18-1.14.32-1.76.58-2.68 1.14-4.23 2.84-5.34 5.96-.25.72-.35 1.04-.55 1.93-.18-.76-.28-1.08-.49-1.73-1.09-3.16-2.65-4.89-5.33-6.11-.71-.32-1.22-.49-2-.67 1.99-.12 3.38-.46 4.65-1.17 1.49-.84 2.53-2.1 3.41-4.24Z" fill="currentColor"/></svg></button>
+          <button type="button" class="icon-btn cover-camera-btn" data-action="new-moment" aria-label="发朋友圈"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4.6c.86 2.2 1.95 3.49 3.52 4.34 1.27.68 2.62 1 4.55 1.11-.68.18-1.14.32-1.76.58-2.68 1.14-4.23 2.84-5.34 5.96-.25.72-.35 1.04-.55 1.93-.18-.76-.28-1.08-.49-1.73-1.09-3.16-2.65-4.89-5.33-6.11-.71-.32-1.22-.49-2-.67 1.99-.12 3.38-.46 4.65-1.17 1.49-.84 2.53-2.1 3.41-4.24Z" fill="currentColor"/></svg></button>
         </div>
         <div class="moments-feed-wrap">
           ${state.moments.map(renderMomentCard).join('')}
@@ -5696,7 +5696,7 @@
         });
     });
 
-    // 鍚庣閰嶇疆
+    // 鍚庣配置
     const API_BASE = window.__YUI_API_BASE__ || (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? '' : 'https://api.somni-ref.top');
     const LOCAL_STATE_KEY = 'murmur_local_state_v1';
     const SYNC_META_KEY = 'murmur_sync_meta_v1';
@@ -8834,7 +8834,7 @@
         };
     }
 
-    const MODEL_CAP_LABEL = { chat: '瀵硅瘽', text: '鏂囨湰', reasoning: '鎺ㄧ悊', tools: '宸ュ叿璋冪敤', vision: '瑙嗚', image: '鐢熷浘' };
+    const MODEL_CAP_LABEL = { chat: '对话', text: '文本', reasoning: '鎺ㄧ悊', tools: '宸ュ叿璋冪敤', vision: '瑙嗚', image: '生图' };
     const MODEL_CAP_SHOW = ['reasoning', 'tools', 'vision', 'image'];
     const MODEL_CAP_SVG = {
         reasoning: '<svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true"><path d="M5 .5A3 3 0 0 0 2.8 5.9l.2.3V8h4V6.2l.2-.3A3 3 0 0 0 5 .5zm-1.2 8h2.4v.5c0 .28-.22.5-.5.5H4.3a.5.5 0 0 1-.5-.5V8.5z"/></svg>',
@@ -9610,7 +9610,7 @@
         } catch (error) {
             console.warn('[agent persona] load failed', error);
             if (!silent) {
-                state.toast = '浜鸿璇诲彇澶辫触';
+                state.toast = '浜鸿读取失败';
                 render();
                 window.setTimeout(() => { state.toast = ''; render(); }, 1200);
             }

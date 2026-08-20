@@ -1146,7 +1146,7 @@ function constellationColor(memory) {
 
 const CONSTELLATION_SLOTS = [[12, 19], [31, 12], [54, 16], [76, 12], [89, 31], [82, 57], [71, 81], [49, 85], [27, 78], [10, 59], [19, 40], [49, 48], [65, 61], [39, 63]];
 
-function MemoryConstellation({ memories, agentNames, selectedId, onSelect }) {
+function DraftMemoryConstellation({ memories, agentNames, selectedId, onSelect }) {
   const nodes = [...memories]
     .sort((a, b) => (b.importance - a.importance) || (b.temperature - a.temperature) || (b.touch_count - a.touch_count) || new Date(b.dateISO || 0) - new Date(a.dateISO || 0))
     .slice(0, CONSTELLATION_SLOTS.length);
@@ -1195,6 +1195,194 @@ function MemoryConstellation({ memories, agentNames, selectedId, onSelect }) {
       </div>
     </section>
   );
+}
+
+function sourceMemoryMapWords(memory) {
+  return Array.isArray(memory.tags)
+    ? memory.tags.map((tag) => String(tag).trim().toLowerCase()).filter(Boolean)
+    : String(memory.tags || memory.type || "").toLowerCase().split(/[\s,，;；|/]+/).map((tag) => tag.trim()).filter(Boolean);
+}
+
+function sourceMemoryMapEdges(entries) {
+  const edges = [];
+  entries.forEach((left, leftIndex) => entries.slice(leftIndex + 1).forEach((right, offset) => {
+    const rightIndex = leftIndex + offset + 1;
+    const shared = sourceMemoryMapWords(left).filter((word) => sourceMemoryMapWords(right).includes(word));
+    if (shared.length || left.type === right.type) edges.push({ leftIndex, rightIndex, strength: Math.min(3, shared.length + 1) });
+  }));
+  return edges.slice(0, 42);
+}
+
+function sourceMemoryMapPoint(index, total) {
+  const angle = (Math.PI * 2 * index / Math.max(total, 1)) - Math.PI / 2;
+  const ring = index < 7 ? 30 : 41;
+  return { x: 50 + Math.cos(angle) * ring, y: 50 + Math.sin(angle) * ring };
+}
+
+function sourceMemoryMapColor(memory) {
+  const colors = { Core: "#bd7a87", Deep: "#7e91af", Recent: "#8aa486", Ephemeral: "#c89c6a" };
+  return colors[memory.type] || "#a387b7";
+}
+
+function LegacySourceMemoryMapConstellation({ memories, agentNames, selectedId, onSelect }) {
+  const nodes = [...memories]
+    .sort((a, b) => (b.importance - a.importance) || (b.temperature - a.temperature) || (b.touch_count - a.touch_count) || new Date(b.dateISO || 0) - new Date(a.dateISO || 0))
+    .slice(0, 14);
+  const selected = nodes.find((memory) => memory.id === selectedId) || nodes[0] || null;
+  const points = nodes.map((_, index) => sourceMemoryMapPoint(index, nodes.length));
+  const edges = sourceMemoryMapEdges(nodes);
+
+  if (!nodes.length) return <div className="memory-map" style={{ minHeight: 330, display: "grid", placeItems: "center", borderRadius: 16, border: "1px solid rgba(218,228,255,.16)", color: "rgba(224,231,250,.6)", background: "radial-gradient(circle at 54% 65%, rgba(74,94,174,.32), transparent 30%), #080a1d", fontSize: 13 }}>还没有能连成星图的记忆。</div>;
+
+  return (
+    <section>
+      <div className="memory-map" role="region" aria-label="记忆星图" style={{ minHeight: 386, borderRadius: 16, border: "1px solid rgba(218,228,255,.16)", background: "radial-gradient(circle at 50% 57%, rgba(61,80,148,.36), transparent 30%), linear-gradient(155deg, #060817 0%, #0b102b 52%, #101230 100%)", boxShadow: "inset 0 1px rgba(255,255,255,.07), 0 18px 38px rgba(5,7,24,.25)" }}>
+        <div aria-hidden="true" style={{ position: "absolute", inset: 0, opacity: .72, backgroundImage: "radial-gradient(circle at 8% 18%, rgba(255,255,255,.84) 0 1px, transparent 1.6px), radial-gradient(circle at 22% 64%, rgba(190,211,255,.75) 0 1px, transparent 1.8px), radial-gradient(circle at 42% 12%, rgba(255,255,255,.7) 0 1px, transparent 1.8px), radial-gradient(circle at 67% 27%, rgba(245,225,186,.68) 0 1px, transparent 1.7px), radial-gradient(circle at 84% 75%, rgba(197,215,255,.7) 0 1px, transparent 1.8px)" }} />
+        <div style={{ position: "relative", zIndex: 2, display: "flex", justifyContent: "space-between", padding: "15px 17px", color: "rgba(226,232,249,.66)", fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace", fontSize: 10, letterSpacing: ".1em" }}><span>MEMORY CONSTELLATION</span><span>{nodes.length} NODES · {edges.length} LINKS</span></div>
+        <svg className="memory-map-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          {edges.map((edge) => <line key={`${edge.leftIndex}-${edge.rightIndex}`} x1={points[edge.leftIndex].x} y1={points[edge.leftIndex].y} x2={points[edge.rightIndex].x} y2={points[edge.rightIndex].y} className={`memory-map-line strength-${edge.strength}`} style={{ stroke: "#aab7e8", strokeOpacity: edge.leftIndex === nodes.indexOf(selected) || edge.rightIndex === nodes.indexOf(selected) ? .85 : .27 }} />)}
+        </svg>
+        {nodes.map((memory, index) => {
+          const point = points[index];
+          const active = memory.id === selected?.id;
+          const color = sourceMemoryMapColor(memory);
+          const size = Math.max(29, Math.min(48, 25 + memory.importance * 4 + memory.temperature * .12));
+          return <button key={memory.id} type="button" className={`memory-map-node${active ? " active" : ""}`} onClick={() => onSelect(memory.id)} title={memory.summary} style={{ "--node-x": `${point.x}%`, "--node-y": `${point.y}%`, "--node-size": `${size}px`, "--node-color": color, zIndex: 3, color: active ? "#11152a" : "rgba(244,247,255,.9)", background: active ? "#f3c76d" : `${color}99`, borderColor: active ? "#fff4d2" : color, boxShadow: active ? "0 0 0 5px rgba(243,199,109,.2), 0 0 24px rgba(255,212,133,.78)" : `0 0 13px ${color}99` }}><span>{memory.summary.slice(0, 14)}</span></button>;
+        })}
+      </div>
+      {selected && <div className="memory-map-detail" style={{ padding: "12px 2px 0", color: "rgba(75,65,61,.9)" }}>
+        <div><strong>{selected.summary}</strong><em>{agentNames.get(selected.person) || selected.agent_id} · {selected.type} · 热度 {selected.temperature || 0}</em></div>
+        <button type="button" onClick={() => onSelect("")} style={{ minHeight: 36, padding: "0 11px", border: "1px solid rgba(136,120,148,.22)", borderRadius: 9, background: "rgba(255,255,255,.48)", color: "#756a75", cursor: "pointer", fontSize: 11 }}>取消聚焦</button>
+      </div>}
+    </section>
+  );
+}
+
+function MemoryConstellation({ memories, selectedId, onSelect }) {
+  const canvasRef = useRef(null);
+  const animationRef = useRef(0);
+  const layoutRef = useRef({ positions: new Map(), rotation: 0, hoverId: null, width: 0, height: 0 });
+  const graph = useMemo(() => {
+    const items = [...memories]
+      .sort((a, b) => (b.importance - a.importance) || (b.temperature - a.temperature) || (b.touch_count - a.touch_count) || new Date(b.dateISO || 0) - new Date(a.dateISO || 0))
+      .slice(0, 30);
+    const nodes = items.map((memory) => ({ id: memory.id, label: memory.summary, freq: Math.max(1, memory.importance + memory.temperature / 25 + memory.touch_count / 4), anchor: memory.type === "Core" }));
+    const edges = sourceMemoryMapEdges(items)
+      .map((edge) => ({ source: nodes[edge.leftIndex]?.id, target: nodes[edge.rightIndex]?.id, weight: edge.strength }))
+      .filter((edge) => edge.source && edge.target);
+    return { nodes, edges };
+  }, [memories]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return undefined;
+    const context = canvas.getContext("2d");
+    const state = layoutRef.current;
+    const nodes = graph.nodes;
+    const edgeList = graph.edges;
+    const positions = new Map();
+    const redraw = () => {
+      const rect = canvas.getBoundingClientRect();
+      const width = Math.max(1, rect.width);
+      const height = Math.max(1, rect.height);
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(width * ratio);
+      canvas.height = Math.round(height * ratio);
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      state.width = width;
+      state.height = height;
+      const centerX = width / 2;
+      const centerY = height / 2;
+      nodes.forEach((node, index) => {
+        const angle = (index / Math.max(nodes.length, 1)) * Math.PI * 2;
+        const radius = Math.min(width, height) * (0.22 + (index % 3) * 0.055);
+        positions.set(node.id, { x: centerX + Math.cos(angle) * radius, y: centerY + Math.sin(angle) * radius });
+      });
+      for (let iteration = 0; iteration < Math.min(120, 30 + nodes.length * 2); iteration += 1) {
+        nodes.forEach((left, leftIndex) => nodes.slice(leftIndex + 1).forEach((right) => {
+          const a = positions.get(left.id); const b = positions.get(right.id);
+          let dx = b.x - a.x; let dy = b.y - a.y;
+          const distance = Math.max(1, Math.hypot(dx, dy));
+          const force = 1400 / (distance * distance);
+          dx = (dx / distance) * force; dy = (dy / distance) * force;
+          a.x -= dx; a.y -= dy; b.x += dx; b.y += dy;
+        }));
+        edgeList.forEach((edge) => {
+          const a = positions.get(edge.source); const b = positions.get(edge.target);
+          if (!a || !b) return;
+          let dx = b.x - a.x; let dy = b.y - a.y;
+          const distance = Math.max(1, Math.hypot(dx, dy));
+          const force = (distance - (nodes.length < 20 ? 130 : 100)) * 0.014 * Math.min(1, edge.weight / 4);
+          dx = (dx / distance) * force; dy = (dy / distance) * force;
+          a.x += dx; a.y += dy; b.x -= dx; b.y -= dy;
+        });
+        nodes.forEach((node) => { const point = positions.get(node.id); point.x += (centerX - point.x) * 0.006; point.y += (centerY - point.y) * 0.006; });
+      }
+      state.positions = positions;
+    };
+    redraw();
+    const resizeObserver = new ResizeObserver(redraw);
+    resizeObserver.observe(canvas);
+    const startedAt = performance.now();
+    const render = (now) => {
+      const { width, height } = state;
+      const time = (now - startedAt) / 1000;
+      const focusId = selectedId || null;
+      context.clearRect(0, 0, width, height);
+      context.fillStyle = "#ebe6d9";
+      context.fillRect(0, 0, width, height);
+      context.beginPath();
+      for (let x = 26; x < width; x += 26) { if (Math.round(x / 26) % 5) { context.moveTo(x, 0); context.lineTo(x, height); } }
+      for (let y = 26; y < height; y += 26) { if (Math.round(y / 26) % 5) { context.moveTo(0, y); context.lineTo(width, y); } }
+      context.strokeStyle = "rgba(140,132,112,.13)"; context.lineWidth = .5; context.stroke();
+      context.beginPath();
+      for (let x = 0; x <= width; x += 130) { context.moveTo(x, 0); context.lineTo(x, height); }
+      for (let y = 0; y <= height; y += 130) { context.moveTo(0, y); context.lineTo(width, y); }
+      context.strokeStyle = "rgba(120,112,92,.22)"; context.lineWidth = .8; context.stroke();
+      if (!nodes.length) { context.fillStyle = "rgba(90,82,62,.45)"; context.font = "14px ui-monospace, monospace"; context.textAlign = "center"; context.fillText("还没有可连接的记忆", width / 2, height / 2); animationRef.current = requestAnimationFrame(render); return; }
+      state.rotation += .00012;
+      const centerX = width / 2; const centerY = height / 2;
+      context.save(); context.translate(centerX, centerY); context.rotate(state.rotation); context.translate(-centerX, -centerY);
+      edgeList.forEach((edge) => {
+        const a = state.positions.get(edge.source); const b = state.positions.get(edge.target);
+        if (!a || !b) return;
+        const strength = edge.source === focusId || edge.target === focusId ? .45 : Math.min(.22, .05 + .045 * edge.weight);
+        const gradient = context.createLinearGradient(a.x, a.y, b.x, b.y);
+        gradient.addColorStop(0, `rgba(100,88,60,${strength})`); gradient.addColorStop(.5, `rgba(100,88,60,${strength * .15})`); gradient.addColorStop(1, `rgba(100,88,60,${strength})`);
+        context.beginPath(); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y); context.strokeStyle = gradient; context.lineWidth = edge.source === focusId || edge.target === focusId ? 1.2 : .7; context.stroke();
+      });
+      nodes.forEach((node, index) => {
+        const point = state.positions.get(node.id); if (!point) return;
+        const pulse = Math.sin(time * (.3 + (index % 6) * .1) * Math.PI * 2 + index * 1.7);
+        const isFocus = node.id === focusId; const isHover = node.id === state.hoverId; const lit = isFocus || node.anchor || isHover;
+        const baseRadius = Math.max(1.8, Math.min(6, 1.4 + Math.sqrt(node.freq) * 1.2)); const radius = (isFocus ? baseRadius * 1.4 : isHover ? baseRadius * 1.2 : baseRadius) * (1 + .1 * pulse);
+        const glow = context.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius + (lit ? 11 : 6));
+        glow.addColorStop(0, `rgba(180,138,40,${lit ? .25 : .08})`); glow.addColorStop(1, "rgba(180,138,40,0)");
+        context.beginPath(); context.arc(point.x, point.y, radius + (lit ? 11 : 6), 0, Math.PI * 2); context.fillStyle = glow; context.fill();
+        if (isFocus || node.anchor) { context.beginPath(); context.arc(point.x, point.y, radius + (isFocus ? 8 : 5), 0, Math.PI * 2); context.strokeStyle = "rgba(180,138,40,.55)"; context.lineWidth = isFocus ? 1.4 : 1; context.stroke(); }
+        context.beginPath(); context.arc(point.x, point.y, radius, 0, Math.PI * 2); context.fillStyle = lit ? "rgba(180,138,40,.94)" : "rgba(72,65,50,.62)"; context.fill();
+        if (isFocus) { context.save(); context.translate(point.x, point.y + radius + 16); context.rotate(-state.rotation); context.fillStyle = "rgba(160,120,30,.95)"; context.font = "bold 11px ui-monospace, monospace"; context.textAlign = "center"; context.textBaseline = "top"; context.fillText(node.label.slice(0, 14), 0, 0); context.restore(); }
+      });
+      context.restore();
+      context.fillStyle = focusId ? "rgba(170,128,35,.8)" : "rgba(90,80,55,.38)"; context.font = "11px ui-monospace, monospace"; context.textAlign = "center"; context.textBaseline = "alphabetic";
+      context.fillText(focusId ? `FOCUS · ${nodes.length} NODES · 点击焦点返回全局` : `TOP ${nodes.length} NODES · 点击节点展开关联`, width / 2, 22);
+      animationRef.current = requestAnimationFrame(render);
+    };
+    animationRef.current = requestAnimationFrame(render);
+    return () => { cancelAnimationFrame(animationRef.current); resizeObserver.disconnect(); };
+  }, [graph, selectedId]);
+
+  const locateNode = (event) => {
+    const canvas = canvasRef.current; const state = layoutRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect(); const mouseX = event.clientX - rect.left; const mouseY = event.clientY - rect.top;
+    const centerX = state.width / 2; const centerY = state.height / 2; const cosine = Math.cos(-state.rotation); const sine = Math.sin(-state.rotation);
+    const x = centerX + (mouseX - centerX) * cosine - (mouseY - centerY) * sine; const y = centerY + (mouseX - centerX) * sine + (mouseY - centerY) * cosine;
+    const hit = graph.nodes.find((node) => { const point = state.positions.get(node.id); return point && Math.hypot(x - point.x, y - point.y) < Math.max(9, Math.sqrt(node.freq) * 2.5 + 5); });
+    onSelect(hit ? (hit.id === selectedId ? "" : hit.id) : selectedId);
+  };
+
+  return <section style={{ position: "relative" }}><canvas ref={canvasRef} role="img" aria-label="记忆网络星图" onClick={locateNode} style={{ display: "block", width: "100%", height: 390, borderRadius: 16, cursor: "pointer", boxShadow: "inset 6px 6px 16px rgba(80,78,58,.30), inset -5px -5px 12px rgba(255,255,255,.30), 0 0 0 8px rgba(255,255,255,.45), 10px 10px 26px rgba(80,70,58,.16)" }} /><div style={{ marginTop: 18, padding: "9px 14px", borderRadius: 10, background: "#ebe6d9", color: "rgba(90,82,62,.65)", fontFamily: "ui-monospace, monospace", fontSize: 11, letterSpacing: ".04em" }}>SYSTEM READY · 点击星点展开关联记忆</div></section>;
 }
 
 function buildAmberStats(memories) {

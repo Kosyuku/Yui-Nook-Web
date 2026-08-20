@@ -353,8 +353,8 @@ function createInitialPhone() {
     wallpaper: saved.wallpaper === previousDefaultWallpaper ? defaultWallpaper : (saved.wallpaper || defaultWallpaper),
     desktopApps: ensureDefaultApps(normalizeSavedApps(saved.desktopApps, defaultDesktopApps)),
     dockApps: normalizeSavedApps(saved.dockApps, defaultDockApps),
-    layout: saved.layout || "鎭嬬埍缁勪欢 + 6 App",
-    colorMode: saved.colorMode || "璺熼殢绯荤粺",
+    layout: saved.layout || "恋爱组件 + 6 App",
+    colorMode: saved.colorMode || "跟随系统",
     appFont: saved.appFont || "Zen Maru Gothic",
     codeFont: saved.codeFont || "系统默认",
     fontScale: saved.fontScale || 100,
@@ -1978,11 +1978,11 @@ function DiaryApp() {
                 }}>
                   {notebooks.map((notebook) => <option key={notebook.id} value={notebook.id}>{notebook.name || notebook.id}</option>)}
                 </select>
-                {currentNotebook?.can_rename && <button className="soft-button compact" type="button" onClick={renameNotebook}>鏀瑰悕</button>}
+                {currentNotebook?.can_rename && <button className="soft-button compact" type="button" onClick={renameNotebook}>改名</button>}
               </div>
             )}
             <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="今天发生了什么？" disabled={!notebookId} />
-            <button className="soft-button" type="submit" disabled={!notebookId}>淇濆瓨</button>
+            <button className="soft-button" type="submit" disabled={!notebookId}>保存</button>
           </form>
           <div className="diary-list">
             {entries.map((entry) => (
@@ -2057,7 +2057,7 @@ function DiaryApp() {
             <input value={renameDraft} onChange={(event) => setRenameDraft(event.target.value)} autoFocus />
             <div className="diary-card-actions">
               <button type="button" onClick={() => setRenameDraft(null)}>取消</button>
-              <button type="button" onClick={submitRenameNotebook}>钀界瑪</button>
+              <button type="button" onClick={submitRenameNotebook}>落笔</button>
             </div>
           </div>
         </div>
