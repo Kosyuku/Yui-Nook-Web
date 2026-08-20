@@ -1324,9 +1324,16 @@
         const _globalTheme = state.globalSettings?.theme || '';
         const effectiveTheme = FULL_UI_THEMES.includes(_globalTheme) ? _globalTheme : chatThemeKey;
         mount.dataset.theme = effectiveTheme;
+        // 背景图要铺满整屏（顶栏后面也有），否则顶栏那一条会露出底色，
+        // 看起来像多了一道横带。ARCANUM 那种观感靠的就是整屏一张图。
+        const _roomBgImage = state.currentView === 'room' ? (activeContact?.roomBackgroundImage || '') : '';
+        const roomBgShellAttrs = _roomBgImage
+            ? ` data-shell-bg="image" style="--room-bg-image:url(&quot;${escapeHtml(_roomBgImage)}&quot;)"`
+            : '';
+
         mount.removeAttribute('data-bound');
         mount.innerHTML = `
-      <div class="chat-shell ${state.currentView === 'rpRoom' ? 'mode-rp rp-theatre-shell' : 'mode-normal'}" data-theme="${effectiveTheme}">
+      <div class="chat-shell ${state.currentView === 'rpRoom' ? 'mode-rp rp-theatre-shell' : 'mode-normal'}" data-theme="${effectiveTheme}"${roomBgShellAttrs}>
         ${renderHeader()}
         <div class="chat-app-body ${['room', 'rpRoom'].includes(state.currentView) ? 'room-layout' : ''} ${showBottomNav() ? 'has-bottom-nav' : ''}">
           ${renderBody()}
@@ -2032,6 +2039,11 @@
                 ccEnabled: false,
                 ...(contact.settings || {}),
             },
+            // 这个函数是白名单式的：没列出来的字段会被丢掉。
+            // 聊天背景的两个字段之前不在名单里，所以设置能保存、
+            // 一经规范化就没了 —— 表现就是「填了 URL 没反应」。
+            roomBackground: String(contact.roomBackground || '点阵'),
+            roomBackgroundImage: String(contact.roomBackgroundImage || ''),
         };
     }
 

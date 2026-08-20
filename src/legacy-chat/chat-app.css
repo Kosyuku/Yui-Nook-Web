@@ -7458,9 +7458,10 @@ button.model-choice-item {
   --_chrome-zone-bg: transparent;
 }
 
-/* 壁纸铺满整个应用，玻璃浮在它上面 */
+/* 壁纸铺满整个应用，玻璃浮在它上面。
+   用户设了背景图就优先用它 —— 这条带 #id，不这样写会盖掉 shell 上的图。 */
 #chat-app-root[data-theme="arcanum"] .chat-shell {
-  background: var(--_wallpaper) center / cover no-repeat fixed;
+  background: var(--room-bg-image, var(--_wallpaper)) center / cover no-repeat fixed;
 }
 
 /* 磨砂：这个主题里「凡是有底色的浮层，都必须是玻璃」。
@@ -7800,4 +7801,23 @@ button.model-choice-item {
 /* 霧藍：有自定义图时，壁纸让位给它，别再叠一层蓝渐变 */
 #chat-app-root[data-theme="arcanum"] .room-page[data-room-bg="图片"] {
   background-color: transparent;
+}
+
+/* 背景图铺满整个 shell（含顶栏后面）。只铺在 .room-page 上的话，
+   顶栏那一条会露出主题底色，看起来像多了一道横带。 */
+.chat-shell[data-shell-bg="image"] {
+  background-image: var(--room-bg-image, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* shell 已经有图了，room-page 就别再叠一层同样的图 */
+.chat-shell[data-shell-bg="image"] .room-page[data-room-bg="图片"] {
+  background-image: none;
+}
+
+/* 顶栏在整屏背景上也要是玻璃，不能是不透明的一条 */
+.chat-shell[data-shell-bg="image"] .room-hero {
+  background: transparent;
 }
