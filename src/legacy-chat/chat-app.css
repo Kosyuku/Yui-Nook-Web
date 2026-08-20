@@ -6032,6 +6032,7 @@ button.model-choice-item {
   --chrome-header-border: var(--_chrome-header-border, var(--bd-main));
   --chrome-header-shadow: var(--_chrome-header-shadow, var(--sd-md));
   --chrome-zone-bg: var(--_chrome-zone-bg, var(--ac-soft));
+  --chrome-herobar-bg: var(--_chrome-herobar-bg, transparent);
   --chat-ui-ai-bubble: var(--_bubble-ai);
   --chat-ui-user-bubble: var(--_bubble-user);
   --chat-ui-input: var(--_input);
@@ -6791,7 +6792,9 @@ button.model-choice-item {
 
 #chat-app-root[data-theme] .chat-shell.mode-normal .room-hero {
   position: sticky;
-  background: transparent;
+  /* 默认透明（顶栏的底由里面那张卡片承担）。但用背景图的主题需要
+     整条通栏都有底，否则深色照片上的文字会糊掉 —— 交给 token 决定。 */
+  background: var(--chrome-herobar-bg, transparent);
 }
 
 #chat-app-root[data-theme] .chat-shell.mode-normal .room-hero::after {
@@ -7455,7 +7458,9 @@ button.model-choice-item {
   --_chrome-header-bg: transparent;
   --_chrome-header-border: transparent;
   --_chrome-header-shadow: none;
-  --_chrome-zone-bg: transparent;
+  /* 输入区要有底托着，否则深色背景图上占位符会糊掉 */
+  --_chrome-zone-bg: rgba(255,255,255,.32);
+  --_chrome-herobar-bg: rgba(255,255,255,.32);
 }
 
 /* 壁纸铺满整个应用，玻璃浮在它上面。
@@ -7475,12 +7480,36 @@ button.model-choice-item {
 
 /* 顶栏那层「玻璃板」：光有 blur 没有底色，也会画出一个矩形边界，
    所以这里必须把 blur 也去掉，不然框还在。 */
+/* 顶栏里那张「浮起来的圆角卡片」不要 —— 它才是之前那个多余的框。 */
 #chat-app-root[data-theme="arcanum"] .room-hero-inner {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   background: transparent;
   border: none;
   box-shadow: none;
+}
+
+/* 但顶栏本身要有底 —— 和其他主题一样。背景图可能是任意亮度，
+   没有这层底，深色照片上的名字和模型名就糊进去了。
+   做成整条通栏的玻璃，而不是中间浮一块。 */
+#chat-app-root[data-theme="arcanum"] .room-hero,
+#chat-app-root[data-theme="arcanum"] .chat-page-header {
+  -webkit-backdrop-filter: blur(20px) saturate(1.35);
+  backdrop-filter: blur(20px) saturate(1.35);
+  border-bottom: 1px solid var(--bd-soft);
+}
+
+#chat-app-root[data-theme="arcanum"] .chat-page-header {
+  background: var(--sf-veil);
+}
+
+/* 输入区同理：整条通栏的玻璃，托住输入胶囊。
+   底色必须走 chrome token —— 直接写规则会被
+   `#chat-app-root[data-theme] .chat-shell.mode-normal .composer-zone` 盖掉。 */
+#chat-app-root[data-theme="arcanum"] .composer-zone {
+  -webkit-backdrop-filter: blur(20px) saturate(1.35);
+  backdrop-filter: blur(20px) saturate(1.35);
+  border-top: 1px solid var(--bd-soft);
 }
 
 /* 纸纹在霧藍下已经因为 --_dot: transparent 而不可见，不需要再写
@@ -7815,10 +7844,9 @@ button.model-choice-item {
   background-image: none;
 }
 
-/* 顶栏在整屏背景上也要是玻璃，不能是不透明的一条 */
-.chat-shell[data-shell-bg="image"] .room-hero {
-  background: transparent;
-}
+/* 这里曾经把顶栏设成完全透明，但背景图可以是任意亮度 —— 深色照片上
+   名字和模型名就糊没了。顶栏该有一层玻璃底（各主题自己定），
+   所以这条矛盾的规则去掉。 */
 
 /* ── 背景图库 ──────────────────────────────────────────────────── */
 .room-bg-gallery {
