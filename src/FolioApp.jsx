@@ -2,6 +2,15 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import "./FolioApp.css";
 import "./folio-shelf-fix.css";
 import { listMediaItems, mediaUploadProvider, uploadMediaFile, withMediaUrls } from "./mediaApi.js";
+import {
+  createFolioComment,
+  createFolioHighlight,
+  createFolioThought,
+  getFolioPosition,
+  listFolioHighlights,
+  saveFolioPosition,
+  syncLocalFolioAnnotations,
+} from "./folioApi.js";
 
 // ── Utilities ─────────────────────────────────────────────
 function genId() {
@@ -200,26 +209,26 @@ function clearBrowserSelection() {
 }
 
 // ── HighlightPanel ────────────────────────────────────────
-function HighlightPanel({ highlight, activeActor, agents, onAddThought, onAddComment, onClose }) {
+function HighlightPanel({ highlight, onAddThought, onAddComment, onClose }) {
   const [thoughtDraft, setThoughtDraft] = useState("");
   const [commentDraft, setCommentDraft] = useState("");
   const [replyingTo, setReplyingTo] = useState(null);
   const [panelError, setPanelError] = useState("");
 
-  function handleAddThought() {
+  async function handleAddThought() {
     if (!thoughtDraft.trim()) return;
     try {
-      onAddThought(thoughtDraft.trim());
+      await onAddThought(thoughtDraft.trim());
       setThoughtDraft("");
       setPanelError("");
     } catch (error) {
       setPanelError(error?.message || "发布失败，内容先留着。");
     }
   }
-  function handleAddComment(thoughtId) {
+  async function handleAddComment(thoughtId) {
     if (!commentDraft.trim()) return;
     try {
-      onAddComment(thoughtId, commentDraft.trim());
+      await onAddComment(thoughtId, commentDraft.trim());
       setCommentDraft(""); setReplyingTo(null);
       setPanelError("");
     } catch (error) {
@@ -291,7 +300,7 @@ function ReadingContent({ content, highlights, onHighlightClick, contentRef, onM
 }
 
 // ── Main Component ─────────────────────────────────────────
-export default function FolioApp({ onClose, agents = [] }) {
+export default function FolioApp({ onClose }) {
   const [data, setData] = useState(loadData);
   const [view, setView] = useState("shelf");
   const [entering, setEntering] = useState(false);
@@ -300,7 +309,6 @@ export default function FolioApp({ onClose, agents = [] }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectionInfo, setSelectionInfo] = useState(null);
   const [activeHighlight, setActiveHighlight] = useState(null);
-  const [activeActor, setActiveActor] = useState("user");
   const [importError, setImportError] = useState("");
   const [importing, setImporting] = useState(false);
   const [migratingToR2, setMigratingToR2] = useState(false);
@@ -410,9 +418,34 @@ export default function FolioApp({ onClose, agents = [] }) {
     clearReaderTransientState();
   }, [currentChapterIndex, clearReaderTransientState]);
 
+  useEffect(() => {
+    if (view !== "reading" || !currentBook?.mediaItemId) return;
+    const timer = window.setTimeout(() => {
+      saveFolioPosition(currentBook.mediaItemId, currentChapterIndex, 0).catch(error => {
+        console.warn("[folio] save reading position failed", error);
+      });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [view, currentBook?.mediaItemId, currentChapterIndex]);
+
   const updateData = useCallback((updater) => {
     setData(prev => { const next = typeof updater === "function" ? updater(prev) : updater; saveData(next); return next; });
   }, []);
+
+  useEffect(() => {
+    if (view === "shelf" || !currentBook?.mediaItemId) return;
+    let cancelled = false;
+    listFolioHighlights(currentBook.mediaItemId)
+      .then(highlights => {
+        if (cancelled) return;
+        updateData(prev => ({
+          ...prev,
+          books: (prev.books || []).map(book => book.id === currentBook.id ? { ...book, highlights } : book),
+        }));
+      })
+      .catch(error => console.warn("[folio] refresh shared notes failed", error));
+    return () => { cancelled = true; };
+  }, [view, currentBook?.id, currentBook?.mediaItemId, updateData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -421,7 +454,9 @@ export default function FolioApp({ onClose, agents = [] }) {
       if (mediaUploadProvider !== "r2") return;
       try {
         const items = await listMediaItems({ type: "book", limit: 200 });
-        const linkedItems = await withMediaUrls(items);
+        const folioItems = items.filter(item => String(item?.metadata?.source || "").toLowerCase() === "folio");
+        const linkedItems = await withMediaUrls(folioItems);
+        const cachedBooks = loadData().books || [];
         const restoredBooks = [];
         for (const item of linkedItems) {
           if (cancelled || !item?.id || !item.url) continue;
@@ -430,7 +465,10 @@ export default function FolioApp({ onClose, agents = [] }) {
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const text = decodeBookBuffer(await response.arrayBuffer());
             if (!text.trim()) continue;
-            restoredBooks.push(buildBookFromMediaItem(item, text));
+            const cachedBook = cachedBooks.find(book => book.mediaItemId === item.id || (book.storageKey && book.storageKey === item.storage_key));
+            const highlights = await syncLocalFolioAnnotations(item.id, cachedBook?.highlights || []);
+            const readingPosition = await getFolioPosition(item.id).catch(() => null);
+            restoredBooks.push({ ...buildBookFromMediaItem(item, text), highlights, readingPosition });
           } catch (error) {
             console.warn("[folio] restore book from media failed", item.id, error);
           }
@@ -438,12 +476,17 @@ export default function FolioApp({ onClose, agents = [] }) {
         if (cancelled || restoredBooks.length === 0) return;
         updateData(prev => {
           const existingBooks = prev.books || [];
-          const existingKeys = new Set(
-            existingBooks.flatMap(book => [book.mediaItemId, book.storageKey, book.id]).filter(Boolean),
-          );
-          const missingBooks = restoredBooks.filter(book => !existingKeys.has(book.mediaItemId) && !existingKeys.has(book.storageKey));
-          if (missingBooks.length === 0) return prev;
-          return { ...prev, books: [...missingBooks, ...existingBooks] };
+          const restoredByMediaId = new Map(restoredBooks.map(book => [book.mediaItemId, book]));
+          const restoredByStorageKey = new Map(restoredBooks.map(book => [book.storageKey, book]));
+          const mergedBooks = existingBooks.map(book => {
+            const restored = restoredByMediaId.get(book.mediaItemId) || restoredByStorageKey.get(book.storageKey);
+            if (!restored) return book;
+            restoredByMediaId.delete(restored.mediaItemId);
+            restoredByStorageKey.delete(restored.storageKey);
+            return { ...book, ...restored, id: book.id };
+          });
+          const missingBooks = restoredBooks.filter(book => restoredByMediaId.has(book.mediaItemId));
+          return { ...prev, books: [...missingBooks, ...mergedBooks] };
         });
       } catch (error) {
         console.warn("[folio] load media books failed", error);
@@ -512,13 +555,14 @@ export default function FolioApp({ onClose, agents = [] }) {
         const mediaItem = await uploadMediaFile(file, {
           type: "book",
           title: book.title || book.id,
-          metadata: { source: "folio_migration", book_id: book.id },
+          metadata: { source: "folio", book_id: book.id },
         });
+        const highlights = await syncLocalFolioAnnotations(mediaItem.id, book.highlights || []);
         // Update book record
         updateData(prev => ({
           ...prev,
           books: prev.books.map(b => b.id === book.id
-            ? { ...b, mediaItemId: mediaItem?.id || "", storageProvider: "r2", storageKey: mediaItem?.storage_key || "" }
+            ? { ...b, highlights, mediaItemId: mediaItem?.id || "", storageProvider: "r2", storageKey: mediaItem?.storage_key || "" }
             : b
           ),
         }));
@@ -553,9 +597,17 @@ export default function FolioApp({ onClose, agents = [] }) {
     window.setTimeout(clearBrowserSelection, 0);
   }
 
-  function createHighlight() {
+  async function createHighlight() {
     if (!selectionInfo || !currentBook) return;
-    const highlight = { id: genId(), chapterIndex: currentChapterIndex, startOffset: selectionInfo.start, endOffset: selectionInfo.end, text: selectionInfo.text, thoughts: [], createdAt: new Date().toISOString() };
+    let highlight = { id: genId(), chapterIndex: currentChapterIndex, startOffset: selectionInfo.start, endOffset: selectionInfo.end, text: selectionInfo.text, thoughts: [], createdAt: new Date().toISOString() };
+    try {
+      if (currentBook.mediaItemId) {
+        highlight = await createFolioHighlight(currentBook.mediaItemId, highlight);
+      }
+    } catch (error) {
+      console.warn("[folio] create highlight failed", error);
+      return;
+    }
     updateData(prev => ({ ...prev, books: prev.books.map(b => b.id !== currentBookId ? b : { ...b, highlights: [...(b.highlights || []), highlight] }) }));
     setSelectionInfo(null);
     clearBrowserSelection();
@@ -654,12 +706,14 @@ export default function FolioApp({ onClose, agents = [] }) {
     }
   }
 
-  function addThought(content) {
+  async function addThought(content) {
     if (!activeHighlight || !currentBookId || !currentBook) throw new Error("划线状态丢了，重新点一下划线。");
     const sourceHighlight = currentBook.highlights?.find(h => h.id === activeHighlight.id);
     if (!sourceHighlight) throw new Error("没找到这条划线，发布失败。");
-    const agentObj = agents.find(a => a.agent_id === activeActor);
-    const thought = { id: genId(), authorType: activeActor === "user" ? "user" : "agent", authorId: activeActor === "user" ? "user" : activeActor, authorName: activeActor === "user" ? "我" : (agentObj?.display_name || activeActor), content, createdAt: new Date().toISOString(), comments: [] };
+    let thought = { id: genId(), authorType: "user", authorId: "user", authorName: "我", content, createdAt: new Date().toISOString(), comments: [] };
+    if (currentBook.mediaItemId) {
+      thought = await createFolioThought(sourceHighlight.id, thought);
+    }
     const nextHighlight = { ...sourceHighlight, thoughts: [...(sourceHighlight.thoughts || []), thought] };
     updateData(prev => ({
       ...prev,
@@ -677,14 +731,16 @@ export default function FolioApp({ onClose, agents = [] }) {
     setActiveHighlight(nextHighlight);
   }
 
-  function addComment(thoughtId, content) {
+  async function addComment(thoughtId, content) {
     if (!activeHighlight || !currentBookId || !currentBook) throw new Error("划线状态丢了，重新点一下划线。");
     const sourceHighlight = currentBook.highlights?.find(h => h.id === activeHighlight.id);
     if (!sourceHighlight) throw new Error("没找到这条划线，回复失败。");
     const hasThought = (sourceHighlight.thoughts || []).some(t => t.id === thoughtId);
     if (!hasThought) throw new Error("没找到这条感想，回复失败。");
-    const agentObj = agents.find(a => a.agent_id === activeActor);
-    const comment = { id: genId(), authorType: activeActor === "user" ? "user" : "agent", authorName: activeActor === "user" ? "我" : (agentObj?.display_name || activeActor), content, createdAt: new Date().toISOString() };
+    let comment = { id: genId(), authorType: "user", authorId: "user", authorName: "我", content, createdAt: new Date().toISOString() };
+    if (currentBook.mediaItemId) {
+      comment = await createFolioComment(thoughtId, comment);
+    }
     const nextHighlight = {
       ...sourceHighlight,
       thoughts: (sourceHighlight.thoughts || []).map(t => (
@@ -767,7 +823,11 @@ export default function FolioApp({ onClose, agents = [] }) {
             const palette = coverPalette(book.title);
             return (
               <button key={book.id} className={`folio-book-spine ${book.isStarred ? "starred" : ""}`} style={{ animationDelay: `${idx * 50}ms` }}
-                onClick={() => { setCurrentBookId(book.id); setCurrentChapterIndex(0); goToView("cover"); }}>
+                onClick={() => {
+                  setCurrentBookId(book.id);
+                  setCurrentChapterIndex(Math.min(book.readingPosition?.chapterIndex || 0, Math.max(0, (book.chapters?.length || 1) - 1)));
+                  goToView("cover");
+                }}>
                 <div className="folio-book-cover-art" style={{ background: `linear-gradient(140deg, ${palette.from} 0%, ${palette.to} 100%)` }}>
                   <span className="folio-book-initial" style={{ fontSize: book.title.length > 5 ? 14 : 18, whiteSpace: "normal", display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.3, padding: "0 6px", width: "100%", boxSizing: "border-box" }}>
                     {book.title}
@@ -1023,7 +1083,7 @@ export default function FolioApp({ onClose, agents = [] }) {
           </div>
         )}
         {activeHighlight && (
-          <HighlightPanel highlight={activeHighlight} activeActor={activeActor} agents={agents}
+          <HighlightPanel highlight={activeHighlight}
             onAddThought={addThought} onAddComment={addComment} onClose={() => setActiveHighlight(null)} />
         )}
       </div>
