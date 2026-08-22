@@ -419,7 +419,7 @@
   z-index: 30;
   display: flex;
   justify-content: space-around;
-  padding: 10px 16px calc(env(safe-area-inset-bottom) + 10px);
+  padding: 10px 16px;
   background: var(--ac-soft);
   backdrop-filter: blur(14px) saturate(1.04);
   -webkit-backdrop-filter: blur(14px) saturate(1.04);

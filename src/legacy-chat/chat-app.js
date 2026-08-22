@@ -5149,6 +5149,15 @@
                 window.setTimeout(() => { state.toast = ''; renderMomentsStable(); }, 1200);
             } catch (error) {
                 console.warn('[moments] delete failed', error);
+                if (error?.status === 404) {
+                    state.moments = state.moments.filter((item) => item.id !== moment.id);
+                    state.activeMenuMomentId = null;
+                    state.toast = '\u5df2\u5220\u9664\u670b\u53cb\u5708';
+                    queueLocalSyncIfChanged(120);
+                    renderMomentsStable();
+                    window.setTimeout(() => { state.toast = ''; renderMomentsStable(); }, 1200);
+                    return;
+                }
                 state.toast = '\u5220\u9664\u5931\u8d25';
                 renderMomentsStable();
                 window.setTimeout(() => { state.toast = ''; renderMomentsStable(); }, 1400);
@@ -9640,7 +9649,11 @@
             method: 'DELETE',
         });
         const data = await resp.json().catch(() => ({}));
-        if (!resp.ok) throw new Error(data?.detail || `HTTP ${resp.status}`);
+        if (!resp.ok) {
+            const error = new Error(data?.detail || `HTTP ${resp.status}`);
+            error.status = resp.status;
+            throw error;
+        }
         return data;
     }
 
