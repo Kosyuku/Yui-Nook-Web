@@ -392,18 +392,19 @@ function StageAtelierScreen({ onClose } = {}) {
         {[
           { id: 'desktop', label: '桌面', en: 'desktop' },
           { id: 'widgets', label: '恋爱组件', en: 'widgets' },
+          { id: 'console', label: '控制台', en: 'codex' },
         ].map(t => {
           const active = tab === t.id;
           return (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
-              padding: '7px 18px', border: 'none', cursor: 'pointer',
+              padding: '7px 8px', border: 'none', cursor: 'pointer', flex: '1 1 0', minWidth: 0, justifyContent: 'center',
               background: active ? T.ink : T.card, color: active ? T.cream : T.inkSoft,
-              borderRadius: 100, fontFamily: F.serifCn, fontSize: 13, fontWeight: active ? 500 : 400,
+              borderRadius: 100, fontFamily: F.serifCn, fontSize: 12, fontWeight: active ? 500 : 400,
               letterSpacing: '0.05em', boxShadow: active ? '0 4px 12px -4px rgba(42,37,48,0.3)' : '0 2px 8px -6px rgba(110,100,140,0.3)',
-              transition: 'all 0.15s', display: 'flex', alignItems: 'baseline', gap: 6,
+              transition: 'all 0.15s', display: 'flex', alignItems: 'baseline', gap: 4, whiteSpace: 'nowrap',
             }}>
               <span>{t.label}</span>
-              <span style={{ fontFamily: F.serifEn, fontStyle: 'italic', fontSize: 9, opacity: 0.6, letterSpacing: '0.15em' }}>{t.en}</span>
+              <span style={{ fontFamily: F.serifEn, fontStyle: 'italic', fontSize: 8, opacity: 0.6, letterSpacing: '0.1em' }}>{t.en}</span>
             </button>
           );
         })}
@@ -411,6 +412,8 @@ function StageAtelierScreen({ onClose } = {}) {
 
       {tab === 'desktop' ? (
         <DesktopTab T={T} F={F} accent={accent} accentIdx={accentIdx} setAccentIdx={setAccentIdx} wall={wall} wallIdx={wallIdx} setWallIdx={setWallIdx} customWallpaper={customWallpaper} setCustomWallpaper={setCustomWallpaper} PALETTES={PALETTES} />
+      ) : tab === 'console' ? (
+        <CodexConsole T={T} F={F} accent={accent} />
       ) : (
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <DesktopStage {...{ T, F, Widget, widgetProps, effectiveSize, meta, glass }} />
@@ -423,6 +426,229 @@ function StageAtelierScreen({ onClose } = {}) {
           }} />
         </div>
       )}
+    </div>
+  );
+}
+
+function CodexConsole({ T, F, accent }) {
+  const [status, setStatus] = use4(null);
+  const [threads, setThreads] = use4([]);
+  const [events, setEvents] = use4([]);
+  const [prompt, setPrompt] = use4('');
+  const [busy, setBusy] = use4('');
+  const [error, setError] = use4('');
+  const running = Boolean(status?.running);
+  const errorText = (err, fallback) => err instanceof TypeError ? '网关暂时连不上' : (err?.message || fallback);
+
+  const appendEvent = (entry) => {
+    setEvents(prev => [...prev.slice(-119), entry]);
+  };
+
+  const loadStatus = async () => {
+    const response = await fetch(apiUrl('/api/codex/control/status'));
+    if (!response.ok) throw new Error(`状态读取失败 (${response.status})`);
+    const next = await response.json();
+    setStatus(next);
+    return next;
+  };
+
+  const loadThreads = async () => {
+    const response = await fetch(apiUrl('/api/codex/control/threads?limit=30'));
+    if (!response.ok) throw new Error(`线程读取失败 (${response.status})`);
+    const data = await response.json();
+    setThreads(Array.isArray(data?.data) ? data.data : []);
+  };
+
+  useEffect4(() => {
+    let disposed = false;
+    const refresh = async () => {
+      try {
+        const next = await loadStatus();
+        if (!disposed && next?.running) await loadThreads();
+      } catch (err) {
+        if (!disposed) setError(errorText(err, '控制台连接失败'));
+      }
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 5000);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  useEffect4(() => {
+    if (!running) return undefined;
+    const controller = new AbortController();
+    const connect = async () => {
+      try {
+        const response = await fetch(apiUrl('/api/codex/control/events'), {
+          headers: { Accept: 'text/event-stream' },
+          signal: controller.signal,
+        });
+        if (!response.ok || !response.body) throw new Error(`事件连接失败 (${response.status})`);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (!controller.signal.aborted) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+          let boundary = buffer.indexOf('\n\n');
+          while (boundary >= 0) {
+            const block = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+            const type = block.match(/^event:\s*(.+)$/m)?.[1] || 'message';
+            const data = block.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n');
+            if (type === 'codex' && data) {
+              try { appendEvent(JSON.parse(data)); } catch { appendEvent({ method: 'console/raw', params: { text: data } }); }
+            }
+            boundary = buffer.indexOf('\n\n');
+          }
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) setError(errorText(err, '事件流已断开'));
+      }
+    };
+    connect();
+    return () => controller.abort();
+  }, [running]);
+
+  const runControl = async (action) => {
+    setBusy(action);
+    setError('');
+    try {
+      const response = await fetch(apiUrl(`/api/codex/control/${action}`), { method: 'POST' });
+      if (!response.ok) throw new Error(`${action} 失败 (${response.status})`);
+      const next = await response.json();
+      setStatus(next);
+      if (next?.running) await loadThreads();
+      else setThreads([]);
+    } catch (err) {
+      setError(errorText(err, '操作失败'));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const sendPrompt = async () => {
+    const content = prompt.trim();
+    if (!content || busy) return;
+    setPrompt('');
+    setBusy('send');
+    setError('');
+    appendEvent({ method: 'console/user', params: { text: content } });
+    try {
+      const response = await fetch(apiUrl('/api/codex/chat'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversation_key: 'console:codex', content, timeout_seconds: 180 }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.detail || `发送失败 (${response.status})`);
+      appendEvent({ method: 'console/reply', params: { text: data?.reply || '' } });
+      await loadStatus();
+      await loadThreads();
+    } catch (err) {
+      setError(errorText(err, '发送失败'));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const interrupt = async () => {
+    const active = Object.entries(status?.active_turns || {})[0];
+    if (!active) return;
+    setBusy('interrupt');
+    setError('');
+    try {
+      const response = await fetch(apiUrl('/api/codex/control/interrupt'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ thread_id: active[0], turn_id: active[1] }),
+      });
+      if (!response.ok) throw new Error(`中断失败 (${response.status})`);
+      await loadStatus();
+    } catch (err) {
+      setError(errorText(err, '中断失败'));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const eventLine = (event) => {
+    const method = String(event?.method || 'event');
+    const params = event?.params || {};
+    const text = params.text || params.delta || params.item?.text || params.turn?.status || '';
+    return { method, text: String(text || '').trim() };
+  };
+
+  const panel = {
+    background: T.card,
+    border: `1px solid ${T.rule}`,
+    borderRadius: 12,
+    padding: 12,
+  };
+  const commandButton = (primary = false) => ({
+    minHeight: 34,
+    padding: '0 13px',
+    borderRadius: 9,
+    border: primary ? `1px solid ${accent}` : `1px solid ${T.ruleStrong}`,
+    background: primary ? accent : T.cardSoft,
+    color: primary ? '#fff' : T.ink,
+    fontFamily: F.serifCn,
+    fontSize: 12,
+    cursor: busy ? 'wait' : 'pointer',
+    opacity: busy ? 0.6 : 1,
+  });
+
+  return (
+    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 18px 18px', display: 'flex', flexDirection: 'column', gap: 10, WebkitOverflowScrolling: 'touch' }}>
+      <div style={{ ...panel, display: 'flex', alignItems: 'center', gap: 11 }}>
+        <div style={{ width: 34, height: 34, borderRadius: 9, display: 'grid', placeItems: 'center', background: `${accent}22`, color: accent, fontFamily: F.mono, fontSize: 13 }}>&gt;_</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <strong style={{ fontFamily: F.serifCn, fontSize: 14, color: T.ink }}>Codex app-server</strong>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: running ? '#35B96B' : T.ruleStrong }} />
+          </div>
+          <div style={{ fontFamily: F.mono, fontSize: 9, color: T.inkSoft, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {running ? `${status?.model || 'Codex'} · PID ${status?.pid || '-'}` : '未运行'}
+          </div>
+        </div>
+        <button type="button" onClick={() => runControl(running ? 'restart' : 'start')} disabled={Boolean(busy)} style={commandButton(true)}>
+          {running ? '重启' : '启动'}
+        </button>
+      </div>
+
+      <div style={{ ...panel, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button type="button" onClick={() => runControl('stop')} disabled={!running || Boolean(busy)} style={commandButton()}>停止</button>
+        <button type="button" onClick={interrupt} disabled={!Object.keys(status?.active_turns || {}).length || Boolean(busy)} style={commandButton()}>中断当前回合</button>
+        <div style={{ marginLeft: 'auto', alignSelf: 'center', fontFamily: F.serifCn, fontSize: 10, color: T.inkSoft }}>
+          {threads.length} 个线程 · {Object.keys(status?.active_turns || {}).length} 个运行中
+        </div>
+      </div>
+
+      <div style={{ ...panel, padding: 0, overflow: 'hidden' }}>
+        <div style={{ padding: '9px 11px', borderBottom: `1px solid ${T.rule}`, display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ fontFamily: F.serifCn, fontSize: 11, color: T.inkSoft }}>实时事件</span>
+          <button type="button" onClick={() => setEvents([])} style={{ all: 'unset', cursor: 'pointer', fontFamily: F.serifCn, fontSize: 10, color: accent }}>清空</button>
+        </div>
+        <div style={{ height: 230, overflowY: 'auto', padding: '8px 10px', background: '#211E26', color: '#EAE3ED', fontFamily: F.mono, fontSize: 9, lineHeight: 1.55 }}>
+          {!events.length && <div style={{ color: '#9D94A3' }}>等待 app-server 事件...</div>}
+          {events.map((event, index) => {
+            const line = eventLine(event);
+            return <div key={`${line.method}-${index}`} style={{ marginBottom: 5, wordBreak: 'break-word' }}><span style={{ color: '#B9A6D8' }}>{line.method}</span>{line.text ? <span style={{ color: '#D8D0DC' }}>  {line.text}</span> : null}</div>;
+          })}
+        </div>
+      </div>
+
+      <div style={panel}>
+        <textarea value={prompt} onChange={event => setPrompt(event.target.value)} placeholder="发给 Codex..." rows={3} style={{ width: '100%', resize: 'vertical', boxSizing: 'border-box', border: `1px solid ${T.ruleStrong}`, borderRadius: 9, background: T.cardSoft, color: T.ink, padding: '9px 10px', outline: 'none', fontFamily: F.sansCn, fontSize: 13, lineHeight: 1.5 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+          <div style={{ flex: 1, fontFamily: F.serifCn, fontSize: 10, color: error ? '#B45555' : T.inkSoft, lineHeight: 1.35 }}>{error || (busy === 'send' ? 'Codex 正在处理…' : status?.cwd || '通过网关连接')}</div>
+          <button type="button" onClick={sendPrompt} disabled={!prompt.trim() || Boolean(busy)} style={commandButton(true)}>发送</button>
+        </div>
+      </div>
     </div>
   );
 }
