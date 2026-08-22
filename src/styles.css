@@ -3,6 +3,7 @@
 :root {
   --app-height: 100vh;
   --app-bg: #faf8f4;
+  --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   /* 暖纸风 token：奶油底 + 玫瑰粉点缀 + 暖墨重音（仿官方 Claude 暖纸感） */
   --accent: #cf8a9b;
@@ -15,6 +16,12 @@
   font-family: "Zen Maru Gothic", "Noto Sans SC", system-ui, sans-serif;
   color: var(--ink);
   background: var(--app-bg);
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --app-height: 100dvh;
+  }
 }
 
 /* 皮肤：薰衣草（原默认紫），<html data-theme="lavender"> 时启用 */
@@ -38,10 +45,10 @@
 html,
 body,
 #root {
-  width: 100vw;
-  height: 100vh;
-  min-width: 100vw;
-  min-height: 100vh;
+  width: 100%;
+  height: var(--app-height);
+  min-width: 0;
+  min-height: 0;
   margin: 0;
   overflow: hidden;
   background: var(--app-bg);
@@ -111,10 +118,10 @@ button {
 }
 
 .phone-root {
-  width: 100vw;
-  height: 100vh;
-  min-height: 100vh;
-  max-height: 100vh;
+  width: 100%;
+  height: var(--app-height);
+  min-height: 0;
+  max-height: var(--app-height);
   overflow: hidden;
   position: relative;
   display: flex;
@@ -123,12 +130,12 @@ button {
 }
 
 .phone-page {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  width: 100vw;
-  height: 100vh;
-  min-height: 100vh;
-  max-height: 100vh;
+  width: 100%;
+  height: var(--app-height);
+  min-height: 0;
+  max-height: var(--app-height);
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
@@ -432,7 +439,7 @@ label,
 
 .desktop-viewport {
   width: min(100%, 520px);
-  height: calc(100vh - 172px);
+  height: calc(var(--app-height) - 172px);
   margin: 58px auto 0;
   overflow: hidden;
   touch-action: pan-y;
@@ -672,8 +679,8 @@ label,
 
 .app-page {
   flex: 1 1 auto;
-  min-height: 100vh;
-  max-height: 100vh;
+  min-height: 0;
+  max-height: none;
   background:
     radial-gradient(circle at 30% 0%, rgba(255, 255, 255, 0.86), transparent 36%),
     linear-gradient(180deg, #fbf8fc, #f2eef6);
@@ -1411,10 +1418,10 @@ label,
 .legacy-calendar-root,
 .legacy-media-root,
 .legacy-home-root {
-  width: 100vw;
-  height: 100vh;
-  min-height: 100vh;
-  max-height: 100vh;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
   flex: 1 1 auto;
   overflow: hidden;
   background: var(--app-bg);
@@ -1723,13 +1730,13 @@ label,
 }
 
 .legacy-chat-root {
-  width: 100vw;
+  width: 100%;
   /* 手机上仍是满宽；桌面上放开到 820px，不再是屏幕中间一条 414px 的窄缝。
      其余页面（魔典/日记）本来就是自适应的，聊天页之前是唯一锁死手机宽度的。 */
-  max-width: min(100vw, 820px);
-  height: 100vh;
-  min-height: 100vh;
-  max-height: 100vh;
+  max-width: min(100%, 820px);
+  height: 100%;
+  min-height: 0;
+  max-height: none;
   margin: 0 auto;
   overflow: hidden;
 }
@@ -1747,8 +1754,9 @@ label,
 }
 
 .chat-shell-page .chat-app {
-  height: 100vh;
-  padding-top: 22px;
+  height: 100%;
+  padding: 0;
+  gap: 0;
 }
 
 .home-player-widget {
@@ -3806,7 +3814,7 @@ label,
 
   .desktop-viewport {
     width: 100%;
-    height: calc(100vh - 220px);
+    height: calc(var(--app-height) - 220px);
   }
 
   .desktop-page {

@@ -29,9 +29,9 @@
 
 .chat-shell {
   position: relative;
-  height: 100vh;
-  min-height: 100vh;
-  max-height: 100vh;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
   width: 100%;
   max-width: 100%;
   display: flex;
@@ -414,7 +414,7 @@
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  width: calc(min(100vw, 414px) - 28px);
+  width: min(calc(100% - 28px), 792px);
   bottom: calc(8px + env(safe-area-inset-bottom, 0px));
   z-index: 30;
   display: flex;
@@ -6374,13 +6374,13 @@ button.model-choice-item {
 
 .contact-persona-editor-card {
   flex: 1;
-  min-height: calc(100vh - 132px);
+  min-height: calc(var(--app-height) - 132px);
   display: flex;
 }
 
 .contact-persona-fullscreen {
   width: 100%;
-  min-height: calc(100vh - 178px);
+  min-height: calc(var(--app-height) - 178px);
   max-height: none;
   resize: none;
 }
@@ -6402,7 +6402,7 @@ button.model-choice-item {
 
 .avatar-cropper-card {
   width: min(92vw, 380px);
-  max-height: 90vh;
+  max-height: calc(var(--app-height) - var(--safe-top) - var(--safe-bottom) - 24px);
   min-height: 0;
   display: flex;
   flex-direction: column;
